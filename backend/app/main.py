@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base
-from app.models import User  # noqa: F401 — ensure models are registered
+from app.models import User, Upload  # noqa: F401 — ensure models are registered
 from app.routers import auth
 
 
