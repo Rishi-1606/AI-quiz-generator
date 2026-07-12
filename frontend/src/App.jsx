@@ -4,6 +4,7 @@ import AppLayout from './components/layout/AppLayout';
 import Login from './pages/Auth/Login';
 import Signup from './pages/Auth/Signup';
 import Dashboard from './pages/Dashboard/Dashboard';
+import Upload from './pages/Upload/Upload';
 import NotFound from './pages/NotFound';
 
 export default function App() {
@@ -17,6 +18,7 @@ export default function App() {
         {/* Protected routes */}
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/upload" element={<Upload />} />
         </Route>
 
         {/* Redirects */}
