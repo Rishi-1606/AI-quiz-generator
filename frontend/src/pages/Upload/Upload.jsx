@@ -1,19 +1,46 @@
 import { useState } from 'react';
-import { FileText } from 'lucide-react';
+import { FileText, AlertCircle, CheckCircle } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import FileDropzone from '../../components/ui/FileDropzone';
+import api from '../../services/api';
 
 export default function Upload() {
   const [selectedFile, setSelectedFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const handleFileSelect = (file) => {
     setSelectedFile(file);
+    setError('');
+    setSuccess('');
   };
 
-  const handleUpload = () => {
-    // Upload logic will be connected in Step 5
-    console.log('Uploading file:', selectedFile?.name);
+  const handleUpload = async () => {
+    if (!selectedFile) return;
+    setIsUploading(true);
+    setError('');
+    setSuccess('');
+
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+
+    try {
+      await api.post('/api/uploads', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      setSuccess(`"${selectedFile.name}" has been uploaded successfully!`);
+      setSelectedFile(null); // Clear selection on success
+    } catch (err) {
+      setError(
+        err.response?.data?.detail || 'Failed to upload document. Please try again.'
+      );
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -47,9 +74,28 @@ export default function Upload() {
       <div className="space-y-4">
         <FileDropzone onFileSelect={handleFileSelect} />
 
+        {/* Upload status messages */}
+        {error && (
+          <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 animate-fade-in">
+            <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
+            <p className="text-red-400 text-sm">{error}</p>
+          </div>
+        )}
+
+        {success && (
+          <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 animate-fade-in">
+            <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+            <p className="text-emerald-400 text-sm">{success}</p>
+          </div>
+        )}
+
         {selectedFile && (
           <div className="flex justify-end animate-fade-in">
-            <Button onClick={handleUpload} size="lg">
+            <Button
+              onClick={handleUpload}
+              size="lg"
+              isLoading={isUploading}
+            >
               Upload Document
             </Button>
           </div>
