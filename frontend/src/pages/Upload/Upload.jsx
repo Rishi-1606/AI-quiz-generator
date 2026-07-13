@@ -1,7 +1,21 @@
-import { Upload as UploadIcon, FileText, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { FileText } from 'lucide-react';
 import Card from '../../components/ui/Card';
+import Button from '../../components/ui/Button';
+import FileDropzone from '../../components/ui/FileDropzone';
 
 export default function Upload() {
+  const [selectedFile, setSelectedFile] = useState(null);
+
+  const handleFileSelect = (file) => {
+    setSelectedFile(file);
+  };
+
+  const handleUpload = () => {
+    // Upload logic will be connected in Step 5
+    console.log('Uploading file:', selectedFile?.name);
+  };
+
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Page header */}
@@ -29,20 +43,18 @@ export default function Upload() {
         </span>
       </div>
 
-      {/* Upload area placeholder — will be replaced with drag-and-drop in Step 4 */}
-      <Card>
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-primary-500/10 flex items-center justify-center mb-4">
-            <UploadIcon className="w-8 h-8 text-primary-400" />
+      {/* Drag-and-drop upload area */}
+      <div className="space-y-4">
+        <FileDropzone onFileSelect={handleFileSelect} />
+
+        {selectedFile && (
+          <div className="flex justify-end animate-fade-in">
+            <Button onClick={handleUpload} size="lg">
+              Upload Document
+            </Button>
           </div>
-          <h3 className="text-lg font-medium text-dark-200 mb-2">
-            Upload area coming soon
-          </h3>
-          <p className="text-dark-400 max-w-sm">
-            Drag-and-drop file upload will be added in the next step.
-          </p>
-        </div>
-      </Card>
+        )}
+      </div>
 
       {/* Uploaded files section */}
       <div>
