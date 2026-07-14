@@ -1,4 +1,4 @@
-import re
+import fitz  # PyMuPDF
 
 
 def extract_text_from_txt(file_path: str) -> str:
@@ -45,6 +45,48 @@ def extract_text_from_txt(file_path: str) -> str:
     return cleaned_text
 
 
+def extract_text_from_pdf(file_path: str) -> str:
+    """
+    Extract text from a PDF file using PyMuPDF.
+
+    - Opens each page and extracts plain text.
+    - Pages are separated by a newline.
+    - Collapses more than 2 consecutive blank lines into one.
+    - Strips overall leading/trailing whitespace.
+    """
+    doc = fitz.open(file_path)
+    pages_text = []
+
+    for page in doc:
+        page_text = page.get_text("text")  # Extract plain text from the page
+        pages_text.append(page_text)
+
+    doc.close()
+
+    # Join all pages
+    full_text = "\n".join(pages_text)
+
+    # Normalize line endings
+    full_text = full_text.replace("\r\n", "\n").replace("\r", "\n")
+
+    # Strip trailing whitespace from each line
+    lines = [line.rstrip() for line in full_text.split("\n")]
+
+    # Collapse more than 2 consecutive blank lines into one
+    cleaned_lines = []
+    blank_count = 0
+    for line in lines:
+        if line == "":
+            blank_count += 1
+            if blank_count <= 1:
+                cleaned_lines.append(line)
+        else:
+            blank_count = 0
+            cleaned_lines.append(line)
+
+    return "\n".join(cleaned_lines).strip()
+
+
 def extract_text(file_path: str, file_type: str) -> str:
     """
     Route to the correct extractor based on file type.
@@ -53,5 +95,8 @@ def extract_text(file_path: str, file_type: str) -> str:
     if file_type == "txt":
         return extract_text_from_txt(file_path)
 
-    # PDF, DOCX, PPTX extractors will be added in later steps
+    if file_type == "pdf":
+        return extract_text_from_pdf(file_path)
+
+    # DOCX, PPTX extractors will be added in later steps
     return ""
