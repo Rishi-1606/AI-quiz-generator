@@ -11,6 +11,7 @@ from app.models.upload import Upload
 from app.schemas.upload import UploadResponse
 from app.middleware.auth import get_current_user
 from app.config import UPLOAD_DIR
+from app.services.extractor import extract_text
 
 router = APIRouter(prefix="/api/uploads", tags=["Uploads"])
 
@@ -76,13 +77,16 @@ def upload_file(
 
     # Save metadata to database
     try:
+        # Extract text from the file immediately after saving
+        extracted = extract_text(storage_path, file_ext)
+
         new_upload = Upload(
             user_id=current_user.id,
             filename=filename,
             file_type=file_ext,
             file_size=file_size,
             storage_path=storage_path,
-            extracted_text="",  # To be populated during text extraction in later steps
+            extracted_text=extracted,
         )
         db.add(new_upload)
         db.commit()
