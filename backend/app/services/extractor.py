@@ -1,4 +1,5 @@
 import fitz  # PyMuPDF
+import docx  # python-docx
 
 
 def extract_text_from_txt(file_path: str) -> str:
@@ -87,6 +88,36 @@ def extract_text_from_pdf(file_path: str) -> str:
     return "\n".join(cleaned_lines).strip()
 
 
+def extract_text_from_docx(file_path: str) -> str:
+    """
+    Extract text from a .docx Word document using python-docx.
+
+    - Reads every paragraph in the document in order.
+    - Preserves paragraph breaks as newlines.
+    - Collapses more than 2 consecutive blank lines into one.
+    - Strips overall leading/trailing whitespace.
+    """
+    document = docx.Document(file_path)
+
+    # Each paragraph becomes one line
+    lines = [paragraph.text for paragraph in document.paragraphs]
+
+    # Collapse more than 2 consecutive blank lines into one
+    cleaned_lines = []
+    blank_count = 0
+    for line in lines:
+        stripped = line.rstrip()
+        if stripped == "":
+            blank_count += 1
+            if blank_count <= 1:
+                cleaned_lines.append(stripped)
+        else:
+            blank_count = 0
+            cleaned_lines.append(stripped)
+
+    return "\n".join(cleaned_lines).strip()
+
+
 def extract_text(file_path: str, file_type: str) -> str:
     """
     Route to the correct extractor based on file type.
@@ -98,5 +129,8 @@ def extract_text(file_path: str, file_type: str) -> str:
     if file_type == "pdf":
         return extract_text_from_pdf(file_path)
 
-    # DOCX, PPTX extractors will be added in later steps
+    if file_type == "docx":
+        return extract_text_from_docx(file_path)
+
+    # PPTX extractor will be added in the next step
     return ""
