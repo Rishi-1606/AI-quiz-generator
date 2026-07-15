@@ -1,5 +1,6 @@
 import fitz  # PyMuPDF
 import docx  # python-docx
+from pptx import Presentation  # python-pptx
 
 
 def extract_text_from_txt(file_path: str) -> str:
@@ -118,6 +119,49 @@ def extract_text_from_docx(file_path: str) -> str:
     return "\n".join(cleaned_lines).strip()
 
 
+def extract_text_from_pptx(file_path: str) -> str:
+    """
+    Extract text from a .pptx PowerPoint file using python-pptx.
+
+    - Reads every slide in order.
+    - Reads every text frame (shape) on each slide.
+    - Separates slides with a blank line.
+    - Collapses more than 2 consecutive blank lines into one.
+    - Strips overall leading/trailing whitespace.
+    """
+    prs = Presentation(file_path)
+    all_lines = []
+
+    for slide_index, slide in enumerate(prs.slides):
+        slide_lines = []
+        for shape in slide.shapes:
+            # Only process shapes that contain text
+            if not shape.has_text_frame:
+                continue
+            for paragraph in shape.text_frame.paragraphs:
+                text = paragraph.text.rstrip()
+                slide_lines.append(text)
+
+        if slide_lines:
+            all_lines.extend(slide_lines)
+            # Separate slides with a blank line
+            all_lines.append("")
+
+    # Collapse more than 2 consecutive blank lines into one
+    cleaned_lines = []
+    blank_count = 0
+    for line in all_lines:
+        if line == "":
+            blank_count += 1
+            if blank_count <= 1:
+                cleaned_lines.append(line)
+        else:
+            blank_count = 0
+            cleaned_lines.append(line)
+
+    return "\n".join(cleaned_lines).strip()
+
+
 def extract_text(file_path: str, file_type: str) -> str:
     """
     Route to the correct extractor based on file type.
@@ -132,5 +176,7 @@ def extract_text(file_path: str, file_type: str) -> str:
     if file_type == "docx":
         return extract_text_from_docx(file_path)
 
-    # PPTX extractor will be added in the next step
+    if file_type == "pptx":
+        return extract_text_from_pptx(file_path)
+
     return ""
