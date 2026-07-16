@@ -8,3 +8,4 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./quiz_generator.db")
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
