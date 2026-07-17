@@ -16,6 +16,7 @@ class User(Base):
 
     # Relationships
     uploads = relationship("Upload", back_populates="user", cascade="all, delete-orphan")
+    quizzes = relationship("Quiz",   back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}', role='{self.role}')>"

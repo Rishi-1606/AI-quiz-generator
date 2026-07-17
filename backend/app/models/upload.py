@@ -17,7 +17,8 @@ class Upload(Base):
     uploaded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    user = relationship("User", back_populates="uploads")
+    user    = relationship("User", back_populates="uploads")
+    quizzes = relationship("Quiz", back_populates="upload", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Upload(id={self.id}, filename='{self.filename}', user_id={self.user_id})>"
