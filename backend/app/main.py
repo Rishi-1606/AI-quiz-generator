@@ -3,8 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base
-from app.models import User, Upload  # noqa: F401 — ensure models are registered
-from app.routers import auth, upload
+from app.models import User, Upload, Quiz, Question  # noqa: F401 — ensure models are registered
+from app.routers import auth, upload, quiz
 
 
 @asynccontextmanager
@@ -36,6 +36,7 @@ app.add_middleware(
 # Include routers
 app.include_router(auth.router)
 app.include_router(upload.router)
+app.include_router(quiz.router)
 
 
 @app.get("/")
