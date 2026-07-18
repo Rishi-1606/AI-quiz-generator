@@ -4,15 +4,16 @@ import {
   AlertCircle,
   CheckCircle,
   Trash2,
-  FileType,
   Loader2,
+  Sparkles,
+  X,
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import FileDropzone from '../../components/ui/FileDropzone';
-import api from '../../services/api';
-
 import FileTypeIcon from '../../components/ui/FileTypeIcon';
+import GenerateQuizModal from '../../components/ui/GenerateQuizModal';
+import api from '../../services/api';
 
 // File type label color mapping
 const FILE_TYPE_CONFIG = {
@@ -43,6 +44,10 @@ export default function Upload() {
   const [uploads, setUploads]         = useState([]);
   const [isFetching, setIsFetching]   = useState(true);
   const [deletingId, setDeletingId]   = useState(null);
+
+  // Quiz generation modal state
+  const [quizModalUpload, setQuizModalUpload]   = useState(null); // upload object to generate from
+  const [generatedQuiz, setGeneratedQuiz]       = useState(null); // last successfully generated quiz
 
   // Fetch all uploaded documents for this user
   const fetchUploads = useCallback(async () => {
@@ -82,6 +87,7 @@ export default function Upload() {
       });
       setUploadSuccess(`"${selectedFile.name}" uploaded successfully!`);
       setSelectedFile(null);
+      setGeneratedQuiz(null); // clear old quiz banner on new upload
       fetchUploads(); // Refresh list
     } catch (err) {
       setUploadError(
@@ -216,19 +222,31 @@ export default function Upload() {
                       </div>
                     </div>
 
-                    {/* Delete button */}
-                    <button
-                      onClick={() => handleDelete(upload.id, upload.filename)}
-                      disabled={deletingId === upload.id}
-                      className="p-2 rounded-lg text-dark-500 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200 disabled:opacity-50 flex-shrink-0"
-                      title="Delete document"
-                    >
-                      {deletingId === upload.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-4 h-4" />
-                      )}
-                    </button>
+                    {/* Actions */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {/* Generate Quiz button */}
+                      <button
+                        onClick={() => setQuizModalUpload(upload)}
+                        className="p-2 rounded-lg text-dark-500 hover:text-primary-400 hover:bg-primary-500/10 transition-all duration-200"
+                        title="Generate quiz from this document"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                      </button>
+
+                      {/* Delete button */}
+                      <button
+                        onClick={() => handleDelete(upload.id, upload.filename)}
+                        disabled={deletingId === upload.id}
+                        className="p-2 rounded-lg text-dark-500 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200 disabled:opacity-50"
+                        title="Delete document"
+                      >
+                        {deletingId === upload.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </Card>
               );
@@ -236,6 +254,38 @@ export default function Upload() {
           </div>
         )}
       </div>
+
+      {/* Generate Quiz Modal */}
+      {quizModalUpload && (
+        <GenerateQuizModal
+          upload={quizModalUpload}
+          onClose={() => setQuizModalUpload(null)}
+          onSuccess={(quiz) => {
+            setQuizModalUpload(null);
+            setGeneratedQuiz(quiz);
+          }}
+        />
+      )}
+
+      {/* Quiz generated success banner */}
+      {generatedQuiz && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm animate-fade-in">
+          <div className="flex items-start gap-3 px-4 py-4 rounded-2xl bg-dark-800 border border-primary-500/30 shadow-2xl">
+            <Sparkles className="w-5 h-5 text-primary-400 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-white font-semibold text-sm">Quiz Generated! 🎉</p>
+              <p className="text-dark-400 text-xs mt-0.5">{generatedQuiz.title}</p>
+              <p className="text-dark-400 text-xs">{generatedQuiz.total_questions} questions · {generatedQuiz.difficulty}</p>
+            </div>
+            <button
+              onClick={() => setGeneratedQuiz(null)}
+              className="text-dark-500 hover:text-white transition-colors ml-1"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
