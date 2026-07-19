@@ -5,6 +5,7 @@ import Login from './pages/Auth/Login';
 import Signup from './pages/Auth/Signup';
 import Dashboard from './pages/Dashboard/Dashboard';
 import Upload from './pages/Upload/Upload';
+import TakeQuiz from './pages/Quiz/TakeQuiz';
 import NotFound from './pages/NotFound';
 
 export default function App() {
@@ -20,6 +21,9 @@ export default function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/upload" element={<Upload />} />
         </Route>
+
+        {/* Full-screen routes (no layout) */}
+        <Route path="/quiz/:quizId" element={<TakeQuiz />} />
 
         {/* Redirects */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

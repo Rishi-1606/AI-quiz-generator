@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X, Sparkles, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import Button from './Button';
 import api from '../../services/api';
 
@@ -10,6 +11,7 @@ const DIFFICULTIES = [
 ];
 
 export default function GenerateQuizModal({ upload, onClose, onSuccess }) {
+  const navigate = useNavigate();
   const [difficulty, setDifficulty]       = useState('medium');
   const [numQuestions, setNumQuestions]   = useState(5);
   const [isGenerating, setIsGenerating]   = useState(false);
@@ -24,7 +26,8 @@ export default function GenerateQuizModal({ upload, onClose, onSuccess }) {
         num_questions: numQuestions,
         difficulty,
       });
-      onSuccess(res.data);  // pass generated quiz back to parent
+      onSuccess?.(res.data);  // notify parent (for toast)
+      navigate(`/quiz/${res.data.id}`);  // navigate to quiz page
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to generate quiz. Please try again.');
     } finally {
