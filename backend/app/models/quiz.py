@@ -20,6 +20,8 @@ class Quiz(Base):
     user      = relationship("User",     back_populates="quizzes")
     upload    = relationship("Upload",   back_populates="quizzes")
     questions = relationship("Question", back_populates="quiz", cascade="all, delete-orphan")
+    attempts  = relationship("Attempt",  back_populates="quiz", cascade="all, delete-orphan")
+
 
     def __repr__(self):
         return f"<Quiz(id={self.id}, title='{self.title}', user_id={self.user_id})>"
