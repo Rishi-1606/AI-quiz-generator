@@ -8,7 +8,9 @@ from app.models.user import User
 from app.models.upload import Upload
 from app.models.quiz import Quiz
 from app.models.question import Question
+from app.models.attempt import Attempt
 from app.schemas.quiz import QuizResponse, QuizSummaryResponse
+from app.schemas.attempt import SubmitQuizRequest, AttemptResponse
 from app.middleware.auth import get_current_user
 from app.services.text_processor import process_text
 from app.services.ai_service import generate_questions_from_chunk
@@ -155,6 +157,90 @@ def get_quizzes(
         .all()
     )
     return quizzes
+
+
+# ─── Submit quiz ─────────────────────────────────────────────────────────────
+
+@router.post("/{quiz_id}/submit", response_model=AttemptResponse, status_code=status.HTTP_201_CREATED)
+def submit_quiz(
+    quiz_id: int,
+    body: SubmitQuizRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Grade a submitted quiz attempt.
+
+    Steps:
+      1. Fetch the quiz and verify ownership.
+      2. Load all questions for this quiz.
+      3. Compare user answers to correct answers — count correct/wrong/skipped.
+      4. Compute percentage score.
+      5. Save the Attempt record.
+      6. Return the AttemptResponse.
+    """
+    # 1. Fetch quiz
+    quiz = (
+        db.query(Quiz)
+        .filter(Quiz.id == quiz_id, Quiz.user_id == current_user.id)
+        .first()
+    )
+    if not quiz:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Quiz not found.",
+        )
+
+    # 2. Load questions
+    questions = (
+        db.query(Question)
+        .filter(Question.quiz_id == quiz_id)
+        .order_by(Question.order_index)
+        .all()
+    )
+    if not questions:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This quiz has no questions.",
+        )
+
+    # 3. Grade: compare user answers against correct_option
+    correct_count = 0
+    wrong_count   = 0
+    skipped_count = 0
+
+    for question in questions:
+        q_id_str = str(question.id)
+        user_choice = body.answers.get(q_id_str)  # int or None
+
+        if user_choice is None:
+            skipped_count += 1
+        elif user_choice == question.correct_option:
+            correct_count += 1
+        else:
+            wrong_count += 1
+
+    total = len(questions)
+    percentage = round((correct_count / total) * 100, 2) if total > 0 else 0.0
+
+    # 4. Save Attempt
+    attempt = Attempt(
+        user_id=current_user.id,
+        quiz_id=quiz_id,
+        score=correct_count,
+        total=total,
+        correct=correct_count,
+        wrong=wrong_count,
+        skipped=skipped_count,
+        percentage=percentage,
+        answers=body.answers,
+        time_taken=body.time_taken,
+    )
+    db.add(attempt)
+    db.commit()
+    db.refresh(attempt)
+
+    return attempt
 
 
 # ─── Get single quiz ──────────────────────────────────────────────────────────
