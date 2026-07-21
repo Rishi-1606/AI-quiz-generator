@@ -227,7 +227,7 @@ def submit_quiz(
     wrong_q_data = []
     for question in questions:
         q_id_str    = str(question.id)
-        user_choice = answers.get(q_id_str)
+        user_choice = body.answers.get(q_id_str)
         if user_choice is not None and user_choice != question.correct_option:
             wrong_q_data.append({
                 "question_text":  question.question_text,
