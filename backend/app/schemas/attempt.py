@@ -33,6 +33,7 @@ class AttemptResponse(BaseModel):
     skipped:      int
     percentage:   float
     answers:      Optional[Dict[str, Optional[int]]]
+    ai_feedback:  Optional[str]
     time_taken:   Optional[int]
     attempted_at: datetime
 

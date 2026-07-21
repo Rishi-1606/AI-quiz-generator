@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, Float, JSON, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, Float, Text, JSON, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -21,6 +21,9 @@ class Attempt(Base):
 
     # User's selected answers: {question_id: selected_option_index or null if skipped}
     answers         = Column(JSON, nullable=True)
+
+    # AI-generated personalized study feedback
+    ai_feedback     = Column(Text, nullable=True)
 
     # Timing
     time_taken      = Column(Integer, nullable=True)               # seconds taken to complete

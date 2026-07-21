@@ -13,7 +13,7 @@ from app.schemas.quiz import QuizResponse, QuizSummaryResponse
 from app.schemas.attempt import SubmitQuizRequest, AttemptResponse
 from app.middleware.auth import get_current_user
 from app.services.text_processor import process_text
-from app.services.ai_service import generate_questions_from_chunk
+from app.services.ai_service import generate_questions_from_chunk, generate_feedback
 
 router = APIRouter(prefix="/api/quizzes", tags=["Quizzes"])
 
@@ -223,7 +223,27 @@ def submit_quiz(
     total = len(questions)
     percentage = round((correct_count / total) * 100, 2) if total > 0 else 0.0
 
-    # 4. Save Attempt
+    # 4. Generate AI feedback on wrong answers
+    wrong_q_data = []
+    for question in questions:
+        q_id_str    = str(question.id)
+        user_choice = answers.get(q_id_str)
+        if user_choice is not None and user_choice != question.correct_option:
+            wrong_q_data.append({
+                "question_text":  question.question_text,
+                "options":        question.options,
+                "correct_option": question.correct_option,
+                "explanation":    question.explanation or "",
+            })
+
+    ai_feedback = generate_feedback(
+        wrong_questions=wrong_q_data,
+        correct_count=correct_count,
+        total=total,
+        difficulty=quiz.difficulty,
+    )
+
+    # 5. Save Attempt
     attempt = Attempt(
         user_id=current_user.id,
         quiz_id=quiz_id,
@@ -235,6 +255,7 @@ def submit_quiz(
         percentage=percentage,
         answers=body.answers,
         time_taken=body.time_taken,
+        ai_feedback=ai_feedback,
     )
     db.add(attempt)
     db.commit()

@@ -135,3 +135,73 @@ def generate_questions_from_chunk(
                 validated.append(q)
 
     return validated
+
+
+# ─────────────────────────────────────────────────────────
+# FEEDBACK GENERATOR
+# ─────────────────────────────────────────────────────────
+
+def generate_feedback(
+    wrong_questions: list[dict],
+    correct_count: int,
+    total: int,
+    difficulty: str,
+) -> str:
+    """
+    Given a list of questions the user got wrong, ask Gemini to produce
+    a short, personalized study recommendation.
+
+    Each item in wrong_questions should have:
+      - question_text (str)
+      - correct_option (int)
+      - options        (list[str])
+      - explanation    (str)
+
+    Returns a plain-text string (2–4 sentences).
+    Returns empty string on any failure (feedback is optional, not critical).
+    """
+    if not wrong_questions:
+        # Perfect score — return a congratulatory message
+        return (
+            f"Excellent work! You answered all {total} questions correctly on the "
+            f"{difficulty} difficulty quiz. You have a strong grasp of this material. "
+            "Consider trying the hard difficulty next!"
+        )
+
+    # Build a compact summary of mistakes for the prompt
+    mistake_lines = []
+    for i, q in enumerate(wrong_questions[:5], 1):   # cap at 5 to save tokens
+        correct_text = q["options"][q["correct_option"]] if q["options"] else "—"
+        mistake_lines.append(
+            f"{i}. Q: {q['question_text']}\n"
+            f"   Correct answer: {correct_text}\n"
+            f"   Hint: {q.get('explanation', '')}"
+        )
+    mistakes_block = "\n".join(mistake_lines)
+
+    prompt = f"""A student just completed a {difficulty.upper()} difficulty quiz and scored {correct_count}/{total}.
+
+They got the following questions wrong:
+{mistakes_block}
+
+Write a SHORT (2-4 sentences) personalized study recommendation for this student.
+- Identify the specific concepts or topics they struggled with.
+- Give ONE concrete action they can take to improve (e.g. "review chapter on X", "practice Y type of problems").
+- Be encouraging but honest.
+- Write in second person ("You...").
+- Do NOT repeat the questions or answers back.
+- Output plain text only, no markdown, no bullet points."""
+
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.7,
+                max_output_tokens=256,
+            ),
+        )
+        return response.text.strip()
+    except Exception:
+        return ""   # Feedback is optional — swallow errors silently

@@ -2,7 +2,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import {
   CheckCircle2, XCircle, MinusCircle, Clock,
-  Trophy, ArrowLeft, RotateCcw, Loader2, BookOpen,
+  Trophy, ArrowLeft, RotateCcw, Loader2, BookOpen, Brain,
 } from 'lucide-react';
 import api from '../../services/api';
 
@@ -141,6 +141,20 @@ export default function QuizResults() {
             ))}
           </div>
         </div>
+
+        {/* ── AI Feedback Card ── */}
+        {attempt.ai_feedback && (
+          <div className="bg-dark-900 border border-primary-500/25 rounded-2xl p-6 shadow-lg">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-xl bg-primary-500/15 flex items-center justify-center flex-shrink-0">
+                <Brain className="w-4 h-4 text-primary-400" />
+              </div>
+              <h2 className="text-white font-semibold text-sm">AI Study Recommendations</h2>
+              <span className="text-xs text-primary-400 bg-primary-500/10 px-2 py-0.5 rounded-full">Powered by Gemini</span>
+            </div>
+            <p className="text-dark-300 text-sm leading-relaxed pl-11">{attempt.ai_feedback}</p>
+          </div>
+        )}
 
         {/* ── Question Breakdown ── */}
         <div>
