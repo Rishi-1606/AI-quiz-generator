@@ -7,12 +7,14 @@ import {
   Loader2,
   Sparkles,
   X,
+  Layers,
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import FileDropzone from '../../components/ui/FileDropzone';
 import FileTypeIcon from '../../components/ui/FileTypeIcon';
 import GenerateQuizModal from '../../components/ui/GenerateQuizModal';
+import GenerateFlashcardsModal from '../../components/ui/GenerateFlashcardsModal';
 import api from '../../services/api';
 
 // File type label color mapping
@@ -46,8 +48,11 @@ export default function Upload() {
   const [deletingId, setDeletingId]   = useState(null);
 
   // Quiz generation modal state
-  const [quizModalUpload, setQuizModalUpload]   = useState(null); // upload object to generate from
-  const [generatedQuiz, setGeneratedQuiz]       = useState(null); // last successfully generated quiz
+  const [quizModalUpload, setQuizModalUpload]           = useState(null);
+  const [generatedQuiz, setGeneratedQuiz]               = useState(null);
+
+  // Flashcard modal state
+  const [flashcardModalUpload, setFlashcardModalUpload] = useState(null);
 
   // Fetch all uploaded documents for this user
   const fetchUploads = useCallback(async () => {
@@ -224,6 +229,15 @@ export default function Upload() {
 
                     {/* Actions */}
                     <div className="flex items-center gap-1 flex-shrink-0">
+                      {/* Flashcards button */}
+                      <button
+                        onClick={() => setFlashcardModalUpload(upload)}
+                        className="p-2 rounded-lg text-dark-500 hover:text-purple-400 hover:bg-purple-500/10 transition-all duration-200"
+                        title="Generate flashcards from this document"
+                      >
+                        <Layers className="w-4 h-4" />
+                      </button>
+
                       {/* Generate Quiz button */}
                       <button
                         onClick={() => setQuizModalUpload(upload)}
@@ -264,6 +278,14 @@ export default function Upload() {
             setQuizModalUpload(null);
             setGeneratedQuiz(quiz);
           }}
+        />
+      )}
+
+      {/* Generate Flashcards Modal */}
+      {flashcardModalUpload && (
+        <GenerateFlashcardsModal
+          upload={flashcardModalUpload}
+          onClose={() => setFlashcardModalUpload(null)}
         />
       )}
 

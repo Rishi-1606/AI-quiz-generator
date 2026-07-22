@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard/Dashboard';
 import Upload from './pages/Upload/Upload';
 import TakeQuiz from './pages/Quiz/TakeQuiz';
 import QuizResults from './pages/Quiz/QuizResults';
+import FlashcardsViewer from './pages/Flashcards/FlashcardsViewer';
 import NotFound from './pages/NotFound';
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
         {/* Full-screen routes (no layout) */}
         <Route path="/quiz/:quizId" element={<TakeQuiz />} />
         <Route path="/quiz/:quizId/results" element={<QuizResults />} />
+        <Route path="/flashcards" element={<FlashcardsViewer />} />
 
         {/* Redirects */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

@@ -205,3 +205,71 @@ Write a SHORT (2-4 sentences) personalized study recommendation for this student
         return response.text.strip()
     except Exception:
         return ""   # Feedback is optional — swallow errors silently
+
+
+# ─────────────────────────────────────────────────────────
+# FLASHCARD GENERATOR
+# ─────────────────────────────────────────────────────────
+
+def generate_flashcards(text: str, num_cards: int = 10) -> list[dict]:
+    """
+    Extract key concept flashcards from study material.
+
+    Returns a list of dicts:
+      { "front": "Term / Question", "back": "Definition / Answer" }
+
+    Returns empty list on failure.
+    """
+    if not text or not text.strip():
+        return []
+
+    num_cards = max(5, min(num_cards, 20))
+
+    prompt = f"""You are an expert tutor creating study flashcards.
+
+From the study material below, extract exactly {num_cards} important concepts as flashcards.
+
+STRICT RULES:
+1. "front" must be a short term, concept name, or question (max 15 words).
+2. "back" must be a clear, concise definition or answer (max 40 words).
+3. Cover the most important and distinct concepts from the material.
+4. Output ONLY valid JSON — no markdown, no code fences, no extra text.
+
+OUTPUT FORMAT:
+[
+  {{"front": "Term or question", "back": "Definition or answer"}},
+  ...
+]
+
+STUDY MATERIAL:
+\"\"\"
+{text[:3000]}
+\"\"\"
+
+Generate {num_cards} flashcards now:"""
+
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.3,
+                max_output_tokens=2048,
+            ),
+        )
+        raw = response.text.strip()
+
+        # Strip markdown fences if present
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+        if raw.endswith("```"):
+            raw = raw[:raw.rfind("```")].strip()
+
+        cards = json.loads(raw)
+        return [c for c in cards if "front" in c and "back" in c]
+    except Exception:
+        return []
