@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from typing import List
 from pydantic import BaseModel
+import json
 
 from app.database import get_db
 from app.models.user import User
@@ -284,3 +286,96 @@ def get_quiz(
             detail="Quiz not found.",
         )
     return quiz
+
+
+# ─── Export quiz ──────────────────────────────────────────────────────────────
+
+@router.get("/{quiz_id}/export")
+def export_quiz(
+    quiz_id: int,
+    format: str = Query(default="txt", enum=["txt", "json"]),
+    include_answers: bool = Query(default=True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Export a quiz as a downloadable file.
+    - format: 'txt' (human-readable) or 'json' (structured data)
+    - include_answers: whether to include correct options and explanations
+    """
+    quiz = (
+        db.query(Quiz)
+        .filter(Quiz.id == quiz_id, Quiz.user_id == current_user.id)
+        .first()
+    )
+    if not quiz:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found.")
+
+    questions = (
+        db.query(Question)
+        .filter(Question.quiz_id == quiz_id)
+        .order_by(Question.order_index)
+        .all()
+    )
+
+    option_letters = ["A", "B", "C", "D"]
+    safe_title = quiz.title.replace("—", "-").replace(" ", "_")[:50]
+
+    # ── JSON export ────────────────────────────────────────────────────────────
+    if format == "json":
+        data = {
+            "title":      quiz.title,
+            "difficulty": quiz.difficulty,
+            "questions": [
+                {
+                    "question": q.question_text,
+                    "options":  q.options,
+                    **(
+                        {
+                            "correct_option": q.correct_option,
+                            "correct_answer": q.options[q.correct_option] if q.options else "",
+                            "explanation":    q.explanation,
+                        } if include_answers else {}
+                    ),
+                }
+                for q in questions
+            ],
+        }
+        content = json.dumps(data, indent=2, ensure_ascii=False)
+        return Response(
+            content=content,
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{safe_title}.json"'},
+        )
+
+    # ── TXT export ─────────────────────────────────────────────────────────────
+    lines = []
+    lines.append(f"{quiz.title}")
+    lines.append(f"Difficulty: {quiz.difficulty.capitalize()}  |  Questions: {len(questions)}")
+    lines.append("=" * 60)
+    lines.append("")
+
+    for i, q in enumerate(questions, 1):
+        lines.append(f"Q{i}. {q.question_text}")
+        for j, opt in enumerate(q.options):
+            lines.append(f"    {option_letters[j]}) {opt}")
+        if include_answers:
+            correct_letter = option_letters[q.correct_option]
+            lines.append(f"    ✔ Answer: {correct_letter}")
+            if q.explanation:
+                lines.append(f"    💬 {q.explanation}")
+        lines.append("")
+
+    if not include_answers:
+        lines.append("=" * 60)
+        lines.append("Answer Key")
+        lines.append("=" * 60)
+        for i, q in enumerate(questions, 1):
+            lines.append(f"Q{i}: {option_letters[q.correct_option]}")
+
+    content = "\n".join(lines)
+    return Response(
+        content=content.encode("utf-8"),
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{safe_title}.txt"'},
+    )

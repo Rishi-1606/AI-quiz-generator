@@ -1,8 +1,9 @@
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   CheckCircle2, XCircle, MinusCircle, Clock,
   Trophy, ArrowLeft, RotateCcw, Loader2, BookOpen, Brain,
+  Download, ChevronDown,
 } from 'lucide-react';
 import api from '../../services/api';
 
@@ -36,6 +37,8 @@ export default function QuizResults() {
   const [quiz,    setQuiz]    = useState(location.state?.quiz    ?? null);
   const [isLoading, setIsLoading] = useState(!attempt || !quiz);
   const [error,     setError]     = useState('');
+  const [showExport, setShowExport] = useState(false);
+  const exportRef = useRef(null);
 
   useEffect(() => {
     if (attempt && quiz) return; // already have data from navigation state
@@ -81,6 +84,25 @@ export default function QuizResults() {
   const { label: scoreLabel, color: scoreColor } = getScoreLabel(attempt.percentage);
   const answers = attempt.answers ?? {};
 
+  const handleExport = (format, includeAnswers) => {
+    const token = localStorage.getItem('token');
+    const url = `http://localhost:8000/api/quizzes/${quizId}/export?format=${format}&include_answers=${includeAnswers}`;
+    const a = document.createElement('a');
+    a.href = url;
+    // Trigger with auth header by fetching as blob
+    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.blob())
+      .then(blob => {
+        const ext = format === 'json' ? 'json' : 'txt';
+        const objUrl = URL.createObjectURL(blob);
+        a.href = objUrl;
+        a.download = `quiz_${quizId}.${ext}`;
+        a.click();
+        URL.revokeObjectURL(objUrl);
+      });
+    setShowExport(false);
+  };
+
   return (
     <div className="min-h-screen bg-dark-950 text-white">
 
@@ -94,6 +116,25 @@ export default function QuizResults() {
             </span>
           </div>
           <div className="flex items-center gap-2">
+            {/* Export dropdown */}
+            <div className="relative" ref={exportRef}>
+              <button
+                onClick={() => setShowExport(s => !s)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dark-700 text-dark-400 hover:text-white text-sm transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" /> Export <ChevronDown className="w-3 h-3" />
+              </button>
+              {showExport && (
+                <div className="absolute right-0 top-9 z-50 w-52 bg-dark-800 border border-dark-700 rounded-xl shadow-2xl overflow-hidden">
+                  <p className="px-3 py-2 text-dark-500 text-xs font-semibold uppercase tracking-wide">With Answers</p>
+                  <button onClick={() => handleExport('txt', true)}  className="w-full text-left px-4 py-2 text-sm text-dark-300 hover:bg-dark-700 hover:text-white transition-colors">.txt (with answers)</button>
+                  <button onClick={() => handleExport('json', true)} className="w-full text-left px-4 py-2 text-sm text-dark-300 hover:bg-dark-700 hover:text-white transition-colors">.json (with answers)</button>
+                  <p className="px-3 py-2 text-dark-500 text-xs font-semibold uppercase tracking-wide border-t border-dark-700 mt-1">Practice (no answers)</p>
+                  <button onClick={() => handleExport('txt', false)}  className="w-full text-left px-4 py-2 text-sm text-dark-300 hover:bg-dark-700 hover:text-white transition-colors">.txt (practice sheet)</button>
+                </div>
+              )}
+            </div>
+
             <button
               onClick={() => navigate(`/quiz/${quizId}`)}
               className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-dark-700 text-dark-400 hover:text-white text-sm transition-colors"
@@ -227,6 +268,12 @@ export default function QuizResults() {
             className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border border-dark-700 text-dark-300 hover:border-dark-600 hover:text-white text-sm font-medium transition-all"
           >
             <RotateCcw className="w-4 h-4" /> Retake Quiz
+          </button>
+          <button
+            onClick={() => handleExport('txt', true)}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border border-dark-700 text-dark-300 hover:border-dark-600 hover:text-white text-sm font-medium transition-all"
+          >
+            <Download className="w-4 h-4" /> Download Quiz
           </button>
           <button
             onClick={() => navigate('/upload')}
