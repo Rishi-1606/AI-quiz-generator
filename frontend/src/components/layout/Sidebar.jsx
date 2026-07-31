@@ -9,16 +9,16 @@ import {
   MessageSquare,
   ChevronLeft,
   ChevronRight,
+  UserCircle,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const navItems = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-  { name: 'Upload', path: '/upload', icon: Upload },
-  { name: 'Quizzes', path: '/quizzes', icon: BookOpen },
+  { name: 'Upload',    path: '/upload',    icon: Upload },
+  { name: 'Quizzes',  path: '/quizzes',   icon: BookOpen },
   { name: 'Flashcards', path: '/flashcards', icon: Layers },
-  { name: 'Analytics', path: '/analytics', icon: BarChart3 },
-  { name: 'AI Tutor', path: '/ai-tutor', icon: MessageSquare },
+  { name: 'Profile',  path: '/profile',   icon: UserCircle },
 ];
 
 export default function Sidebar() {

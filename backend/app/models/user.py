@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, Text
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -11,8 +11,10 @@ class User(Base):
     name = Column(String(100), nullable=False)
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
-    role = Column(String(20), default="student", nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    role        = Column(String(20),  default="student", nullable=False)
+    bio         = Column(Text,         nullable=True)
+    daily_goal  = Column(Integer,      default=1, nullable=False)   # quizzes per day target
+    created_at  = Column(DateTime,     default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     uploads = relationship("Upload", back_populates="user", cascade="all, delete-orphan")
