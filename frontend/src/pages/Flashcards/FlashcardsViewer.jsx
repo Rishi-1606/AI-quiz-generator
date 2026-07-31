@@ -22,7 +22,7 @@ export default function FlashcardsViewer() {
         <div className="text-center">
           <Layers className="w-12 h-12 text-primary-400 mx-auto mb-4" />
           <p className="text-white font-semibold mb-2">No flashcards found</p>
-          <button onClick={() => navigate('/upload')} className="text-primary-400 text-sm hover:underline">
+          <button onClick={() => navigate('/flashcards')} className="text-primary-400 text-sm hover:underline">
             ← Back to documents
           </button>
         </div>
@@ -89,7 +89,7 @@ export default function FlashcardsViewer() {
             <button onClick={restart} className="flex-1 py-2.5 rounded-xl border border-dark-700 text-dark-400 hover:text-white text-sm transition-colors flex items-center justify-center gap-1.5">
               <RotateCcw className="w-3.5 h-3.5" /> Restart
             </button>
-            <button onClick={() => navigate('/upload')} className="flex-1 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-sm transition-colors flex items-center justify-center gap-1.5">
+            <button onClick={() => navigate('/flashcards')} className="flex-1 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-sm transition-colors flex items-center justify-center gap-1.5">
               <ArrowLeft className="w-3.5 h-3.5" /> Documents
             </button>
           </div>
@@ -111,7 +111,7 @@ export default function FlashcardsViewer() {
           </div>
           <div className="flex items-center gap-3 flex-shrink-0">
             <span className="text-dark-400 text-sm">{current + 1} / {total}</span>
-            <button onClick={() => navigate('/upload')} className="text-dark-500 hover:text-white text-sm transition-colors">
+            <button onClick={() => navigate('/flashcards')} className="text-dark-500 hover:text-white text-sm transition-colors">
               ✕
             </button>
           </div>

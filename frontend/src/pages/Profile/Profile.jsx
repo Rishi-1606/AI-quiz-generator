@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import Card from '../../components/ui/Card';
+import { useToast } from '../../context/ToastContext';
 import api from '../../services/api';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -96,7 +97,8 @@ function EditableField({ label, value, onSave, multiline = false, placeholder = 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Profile() {
-  const { user: authUser, fetchUser } = useAuth();
+  const { user: authUser } = useAuth();
+  const toast = useToast();
 
   const [profile, setProfile]   = useState(null);
   const [stats,   setStats]     = useState(null);
@@ -124,8 +126,9 @@ export default function Profile() {
     try {
       const res = await api.patch('/api/profile', { [field]: value });
       setProfile(res.data);
+      toast('Profile updated!', 'success');
     } catch {
-      // silently fail — field stays unchanged
+      toast('Failed to save changes.', 'error');
     }
   };
 

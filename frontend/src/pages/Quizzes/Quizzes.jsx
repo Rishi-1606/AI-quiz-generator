@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import TopicQuizModal from '../../components/ui/TopicQuizModal';
+import { useToast } from '../../context/ToastContext';
 import api from '../../services/api';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -26,6 +27,7 @@ function getDifficultyStyle(d) {
 
 export default function Quizzes() {
   const navigate = useNavigate();
+  const toast     = useToast();
 
   const [quizzes, setQuizzes]       = useState([]);
   const [isLoading, setIsLoading]   = useState(true);
@@ -62,8 +64,9 @@ export default function Quizzes() {
     try {
       await api.delete(`/api/quizzes/${quizId}`);
       setQuizzes(prev => prev.filter(q => q.id !== quizId));
+      toast('Quiz deleted successfully.', 'success');
     } catch {
-      alert('Failed to delete quiz. Please try again.');
+      toast('Failed to delete quiz. Please try again.', 'error');
     } finally {
       setDeletingId(null);
     }
@@ -82,6 +85,7 @@ export default function Quizzes() {
         a.download = `quiz_${quizId}.${ext}`;
         a.click();
         URL.revokeObjectURL(a.href);
+        toast('Download started!', 'success');
       });
     setShowExport(null);
   };

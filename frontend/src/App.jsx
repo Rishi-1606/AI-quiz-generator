@@ -9,6 +9,7 @@ import Quizzes from './pages/Quizzes/Quizzes';
 import Profile from './pages/Profile/Profile';
 import TakeQuiz from './pages/Quiz/TakeQuiz';
 import QuizResults from './pages/Quiz/QuizResults';
+import Flashcards from './pages/Flashcards/Flashcards';
 import FlashcardsViewer from './pages/Flashcards/FlashcardsViewer';
 import NotFound from './pages/NotFound';
 
@@ -26,12 +27,13 @@ export default function App() {
           <Route path="/upload" element={<Upload />} />
           <Route path="/quizzes" element={<Quizzes />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/flashcards" element={<Flashcards />} />
         </Route>
 
         {/* Full-screen routes (no layout) */}
         <Route path="/quiz/:quizId" element={<TakeQuiz />} />
         <Route path="/quiz/:quizId/results" element={<QuizResults />} />
-        <Route path="/flashcards" element={<FlashcardsViewer />} />
+        <Route path="/flashcards/view" element={<FlashcardsViewer />} />
 
         {/* Redirects */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

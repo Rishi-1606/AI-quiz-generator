@@ -18,7 +18,7 @@ export default function GenerateFlashcardsModal({ upload, onClose }) {
         upload_id: upload.id,
         num_cards: numCards,
       });
-      navigate('/flashcards', {
+      navigate('/flashcards/view', {
         state: { cards: res.data.cards, filename: res.data.filename },
       });
     } catch (err) {
