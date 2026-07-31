@@ -5,6 +5,7 @@ import Login from './pages/Auth/Login';
 import Signup from './pages/Auth/Signup';
 import Dashboard from './pages/Dashboard/Dashboard';
 import Upload from './pages/Upload/Upload';
+import Quizzes from './pages/Quizzes/Quizzes';
 import TakeQuiz from './pages/Quiz/TakeQuiz';
 import QuizResults from './pages/Quiz/QuizResults';
 import FlashcardsViewer from './pages/Flashcards/FlashcardsViewer';
@@ -22,6 +23,7 @@ export default function App() {
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/upload" element={<Upload />} />
+          <Route path="/quizzes" element={<Quizzes />} />
         </Route>
 
         {/* Full-screen routes (no layout) */}

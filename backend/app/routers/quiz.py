@@ -161,6 +161,26 @@ def get_quizzes(
     return quizzes
 
 
+# ─── Delete quiz ──────────────────────────────────────────────────────────────
+
+@router.delete("/{quiz_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_quiz(
+    quiz_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a quiz (and all its questions/attempts via cascade)."""
+    quiz = (
+        db.query(Quiz)
+        .filter(Quiz.id == quiz_id, Quiz.user_id == current_user.id)
+        .first()
+    )
+    if not quiz:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found.")
+    db.delete(quiz)
+    db.commit()
+
+
 # ─── Submit quiz ─────────────────────────────────────────────────────────────
 
 @router.post("/{quiz_id}/submit", response_model=AttemptResponse, status_code=status.HTTP_201_CREATED)
