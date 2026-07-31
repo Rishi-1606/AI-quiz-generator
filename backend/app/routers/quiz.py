@@ -15,7 +15,7 @@ from app.schemas.quiz import QuizResponse, QuizSummaryResponse
 from app.schemas.attempt import SubmitQuizRequest, AttemptResponse
 from app.middleware.auth import get_current_user
 from app.services.text_processor import process_text
-from app.services.ai_service import generate_questions_from_chunk, generate_feedback
+from app.services.ai_service import generate_questions_from_chunk, generate_feedback, generate_questions_from_topic
 
 router = APIRouter(prefix="/api/quizzes", tags=["Quizzes"])
 
@@ -25,6 +25,12 @@ class GenerateQuizRequest(BaseModel):
     upload_id: int
     num_questions: int = 5         # default 5 questions
     difficulty: str = "medium"     # easy | medium | hard
+
+
+class GenerateTopicQuizRequest(BaseModel):
+    topic: str
+    num_questions: int = 5
+    difficulty: str = "medium"
 
 
 # ─── Generate quiz ───────────────────────────────────────────────────────────
@@ -141,6 +147,60 @@ def generate_quiz(
     db.commit()
     db.refresh(new_quiz)
 
+    return new_quiz
+
+
+# ─── Generate quiz from topic ─────────────────────────────────────────────────
+
+@router.post("/generate-from-topic", response_model=QuizResponse, status_code=status.HTTP_201_CREATED)
+def generate_quiz_from_topic(
+    body: GenerateTopicQuizRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate a quiz from a free-text topic using Gemini's general knowledge."""
+    topic = body.topic.strip()
+    if not topic:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Topic cannot be empty.")
+
+    try:
+        ai_questions = generate_questions_from_topic(
+            topic=topic,
+            num_questions=body.num_questions,
+            difficulty=body.difficulty,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"AI service error: {str(e)}")
+
+    if not ai_questions:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="AI did not return any valid questions. Please try again.")
+
+    quiz_title = f"{topic.title()} — {body.difficulty.capitalize()} Quiz"
+    time_limit = len(ai_questions) * 60
+
+    new_quiz = Quiz(
+        user_id=current_user.id,
+        upload_id=None,
+        title=quiz_title,
+        difficulty=body.difficulty,
+        time_limit=time_limit,
+        total_questions=len(ai_questions),
+    )
+    db.add(new_quiz)
+    db.flush()
+
+    for index, q in enumerate(ai_questions):
+        db.add(Question(
+            quiz_id=new_quiz.id,
+            question_text=q["question"],
+            options=q["options"],
+            correct_option=q["correct_option"],
+            explanation=q.get("explanation", ""),
+            order_index=index,
+        ))
+
+    db.commit()
+    db.refresh(new_quiz)
     return new_quiz
 
 

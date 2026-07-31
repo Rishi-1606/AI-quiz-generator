@@ -138,6 +138,91 @@ def generate_questions_from_chunk(
 
 
 # ─────────────────────────────────────────────────────────
+# TOPIC-BASED QUIZ GENERATOR
+# ─────────────────────────────────────────────────────────
+
+def generate_questions_from_topic(
+    topic: str,
+    num_questions: int = 5,
+    difficulty: str = "medium",
+) -> list[dict]:
+    """
+    Generate quiz questions from a free-text topic/subject prompt.
+    Uses Gemini's general knowledge instead of a document.
+
+    Returns the same structure as generate_questions_from_chunk:
+      [{ question, options, correct_option, explanation }]
+    """
+    if not topic or not topic.strip():
+        return []
+
+    num_questions = max(1, min(num_questions, 15))
+
+    prompt = f"""You are an expert quiz creator for students and learners.
+
+Generate exactly {num_questions} multiple-choice questions on the following topic:
+TOPIC: {topic}
+
+Difficulty level: {difficulty.upper()}
+- easy   : factual recall, basic definitions
+- medium : conceptual understanding, application
+- hard   : analysis, edge cases, deeper reasoning
+
+STRICT RULES:
+1. Each question must have exactly 4 options (A, B, C, D).
+2. Only ONE option is correct.
+3. "correct_option" must be the index (0 for A, 1 for B, 2 for C, 3 for D).
+4. "explanation" must be 1-2 sentences explaining WHY the correct answer is right.
+5. Use accurate, widely-accepted knowledge for this topic.
+6. Output ONLY valid JSON — no markdown, no extra text, no code fences.
+
+OUTPUT FORMAT:
+[
+  {{
+    "question": "...",
+    "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
+    "correct_option": 0,
+    "explanation": "..."
+  }}
+]
+
+Generate {num_questions} questions on "{topic}" now:"""
+
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    response = client.models.generate_content(
+        model=MODEL_NAME,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            temperature=0.5,
+            top_p=0.9,
+            max_output_tokens=4096,
+        ),
+    )
+
+    raw = response.text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+    if raw.endswith("```"):
+        raw = raw[:raw.rfind("```")].strip()
+
+    try:
+        questions = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Gemini returned invalid JSON: {e}\nRaw:\n{raw[:500]}")
+
+    validated = []
+    for q in questions:
+        if all(k in q for k in ("question", "options", "correct_option", "explanation")):
+            if isinstance(q["options"], list) and len(q["options"]) == 4:
+                validated.append(q)
+
+    return validated
+
+
+# ─────────────────────────────────────────────────────────
 # FEEDBACK GENERATOR
 # ─────────────────────────────────────────────────────────
 

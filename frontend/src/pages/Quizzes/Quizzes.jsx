@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BookOpen, Search, Trash2, RotateCcw, Download,
-  Sparkles, Loader2, ChevronDown, Filter,
+  Sparkles, Loader2, Filter, Brain,
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
+import TopicQuizModal from '../../components/ui/TopicQuizModal';
 import api from '../../services/api';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -31,7 +32,8 @@ export default function Quizzes() {
   const [search, setSearch]         = useState('');
   const [filter, setFilter]         = useState('all');   // all | easy | medium | hard
   const [deletingId, setDeletingId] = useState(null);
-  const [showExport, setShowExport] = useState(null);    // quiz id with open dropdown
+  const [showExport, setShowExport] = useState(null);
+  const [showTopicModal, setShowTopicModal] = useState(false);
 
   const fetchQuizzes = useCallback(async () => {
     setIsLoading(true);
@@ -105,12 +107,20 @@ export default function Quizzes() {
             {quizzes.length} quiz{quizzes.length !== 1 ? 'zes' : ''} generated
           </p>
         </div>
-        <button
-          onClick={() => navigate('/upload')}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium transition-all"
-        >
-          <Sparkles className="w-4 h-4" /> Generate New
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowTopicModal(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-dark-700 text-dark-300 hover:text-white hover:border-dark-600 text-sm font-medium transition-all"
+          >
+            <Brain className="w-4 h-4" /> From Topic
+          </button>
+          <button
+            onClick={() => navigate('/upload')}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium transition-all"
+          >
+            <Sparkles className="w-4 h-4" /> Generate New
+          </button>
+        </div>
       </div>
 
       {/* Search + Filter bar */}
@@ -245,6 +255,8 @@ export default function Quizzes() {
           ))}
         </div>
       )}
+
+      {showTopicModal && <TopicQuizModal onClose={() => setShowTopicModal(false)} />}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 from datetime import datetime
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 
 class QuestionResponse(BaseModel):
@@ -17,7 +17,7 @@ class QuestionResponse(BaseModel):
 
 class QuizResponse(BaseModel):
     id: int
-    upload_id: int
+    upload_id: Optional[int] = None
     title: str
     difficulty: str
     time_limit: int
@@ -32,7 +32,7 @@ class QuizResponse(BaseModel):
 class QuizSummaryResponse(BaseModel):
     """Lightweight quiz card — used in list views (no questions)."""
     id: int
-    upload_id: int
+    upload_id: Optional[int] = None
     title: str
     difficulty: str
     time_limit: int

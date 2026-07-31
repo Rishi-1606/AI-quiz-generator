@@ -9,7 +9,7 @@ class Quiz(Base):
 
     id            = Column(Integer, primary_key=True, autoincrement=True)
     user_id       = Column(Integer, ForeignKey("users.id",   ondelete="CASCADE"), nullable=False)
-    upload_id     = Column(Integer, ForeignKey("uploads.id", ondelete="CASCADE"), nullable=False)
+    upload_id     = Column(Integer, ForeignKey("uploads.id", ondelete="SET NULL"), nullable=True)
     title         = Column(String(300), nullable=False)
     difficulty    = Column(String(10), nullable=False, default="medium")  # easy | medium | hard
     time_limit    = Column(Integer, nullable=False, default=600)          # seconds (default 10 min)

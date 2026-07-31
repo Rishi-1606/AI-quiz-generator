@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import Card from '../../components/ui/Card';
+import TopicQuizModal from '../../components/ui/TopicQuizModal';
 import api from '../../services/api';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -86,8 +87,9 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate  = useNavigate();
 
-  const [stats, setStats]       = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats]         = useState(null);
+  const [isLoading, setIsLoading]  = useState(true);
+  const [showTopicModal, setShowTopicModal] = useState(false);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -242,26 +244,43 @@ export default function Dashboard() {
       {/* ── Quick Actions ── */}
       <div>
         <h2 className="text-xl font-semibold text-white mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
-            { title: 'Upload Document', desc: 'Upload study materials to generate a quiz', icon: Upload, path: '/upload', gradient: 'from-primary-500 to-blue-600' },
-            { title: 'Generate Quiz with AI', desc: 'Pick any uploaded document and start a quiz', icon: Brain, path: '/upload', gradient: 'from-purple-500 to-primary-600' },
+            { title: 'Upload Document', desc: 'Upload study materials to generate a quiz', icon: Upload, path: '/upload', gradient: 'from-primary-500 to-blue-600', onClick: null },
+            { title: 'Generate from Topic', desc: 'Quiz on any topic — no file needed', icon: Brain, path: null, gradient: 'from-purple-500 to-primary-600', onClick: () => setShowTopicModal(true) },
           ].map((action) => (
-            <Link key={action.title} to={action.path}>
-              <div className="group flex items-center gap-4 p-5 rounded-2xl border border-dark-700 bg-dark-900/50 hover:border-primary-500/40 hover:bg-dark-800/60 transition-all duration-200">
-                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${action.gradient} flex items-center justify-center flex-shrink-0 shadow-lg group-hover:scale-110 transition-transform duration-200`}>
-                  <action.icon className="w-5 h-5 text-white" />
+            action.path ? (
+              <Link key={action.title} to={action.path}>
+                <div className="group flex items-center gap-4 p-5 rounded-2xl border border-dark-700 bg-dark-900/50 hover:border-primary-500/40 hover:bg-dark-800/60 transition-all duration-200">
+                  <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${action.gradient} flex items-center justify-center flex-shrink-0 shadow-lg group-hover:scale-110 transition-transform duration-200`}>
+                    <action.icon className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-white text-sm font-semibold">{action.title}</p>
+                    <p className="text-dark-400 text-xs mt-0.5">{action.desc}</p>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-dark-600 group-hover:text-primary-400 ml-auto flex-shrink-0 transition-colors" />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-white text-sm font-semibold">{action.title}</p>
-                  <p className="text-dark-400 text-xs mt-0.5">{action.desc}</p>
+              </Link>
+            ) : (
+              <button key={action.title} onClick={action.onClick} className="text-left">
+                <div className="group flex items-center gap-4 p-5 rounded-2xl border border-dark-700 bg-dark-900/50 hover:border-purple-500/40 hover:bg-dark-800/60 transition-all duration-200">
+                  <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${action.gradient} flex items-center justify-center flex-shrink-0 shadow-lg group-hover:scale-110 transition-transform duration-200`}>
+                    <action.icon className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-white text-sm font-semibold">{action.title}</p>
+                    <p className="text-dark-400 text-xs mt-0.5">{action.desc}</p>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-dark-600 group-hover:text-purple-400 ml-auto flex-shrink-0 transition-colors" />
                 </div>
-                <ArrowRight className="w-4 h-4 text-dark-600 group-hover:text-primary-400 ml-auto flex-shrink-0 transition-colors" />
-              </div>
-            </Link>
+              </button>
+            )
           ))}
         </div>
       </div>
+
+      {showTopicModal && <TopicQuizModal onClose={() => setShowTopicModal(false)} />}
     </div>
   );
 }
