@@ -16,6 +16,7 @@ from app.schemas.attempt import SubmitQuizRequest, AttemptResponse
 from app.middleware.auth import get_current_user
 from app.services.text_processor import process_text
 from app.services.ai_service import generate_questions_from_chunk, generate_feedback, generate_questions_from_topic
+from app.services.grading_service import grade_question
 
 router = APIRouter(prefix="/api/quizzes", tags=["Quizzes"])
 
@@ -303,37 +304,49 @@ def submit_quiz(
             detail="This quiz has no questions.",
         )
 
-    # 3. Grade: compare user answers against correct_option
-    correct_count = 0
-    wrong_count   = 0
-    skipped_count = 0
+    # 3. Grade: dispatch by question type via grading_service
+    correct_count  = 0
+    wrong_count    = 0
+    skipped_count  = 0
+    points_earned  = 0
+    points_total   = sum(q.points for q in questions)
 
     for question in questions:
-        q_id_str = str(question.id)
-        user_choice = body.answers.get(q_id_str)  # int or None
+        q_id_str    = str(question.id)
+        user_answer = body.answers.get(q_id_str)  # Any type or None
 
-        if user_choice is None:
+        if user_answer is None:
             skipped_count += 1
-        elif user_choice == question.correct_option:
-            correct_count += 1
         else:
-            wrong_count += 1
+            result = grade_question(question, user_answer)
+            if result.correct:
+                correct_count += 1
+                points_earned += result.points_earned
+            else:
+                wrong_count += 1
 
-    total = len(questions)
+    total      = len(questions)
     percentage = round((correct_count / total) * 100, 2) if total > 0 else 0.0
 
     # 4. Generate AI feedback on wrong answers
     wrong_q_data = []
     for question in questions:
         q_id_str    = str(question.id)
-        user_choice = body.answers.get(q_id_str)
-        if user_choice is not None and user_choice != question.correct_option:
-            wrong_q_data.append({
-                "question_text":  question.question_text,
-                "options":        question.options,
-                "correct_option": question.correct_option,
-                "explanation":    question.explanation or "",
-            })
+        user_answer = body.answers.get(q_id_str)
+        # Only MCQ questions feed into the AI feedback generator (for now)
+        if question.type == "mcq" and user_answer is not None:
+            result = grade_question(question, user_answer)
+            if not result.correct:
+                # Build feedback payload using new answer_key with legacy fallback
+                import json as _json
+                ak = question.answer_key if isinstance(question.answer_key, dict) else (_json.loads(question.answer_key) if question.answer_key else {})
+                correct_idx = ak.get("correct_index", question.correct_option)
+                wrong_q_data.append({
+                    "question_text":  question.question_text,
+                    "options":        question.options or [],
+                    "correct_option": correct_idx,
+                    "explanation":    question.explanation or "",
+                })
 
     ai_feedback = generate_feedback(
         wrong_questions=wrong_q_data,

@@ -1,6 +1,6 @@
 from datetime import datetime
 from pydantic import BaseModel
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 
 class SubmitQuizRequest(BaseModel):
@@ -18,7 +18,7 @@ class SubmitQuizRequest(BaseModel):
         "time_taken": 245
     }
     """
-    answers: Dict[str, Optional[int]]   # {question_id: selected_option or null}
+    answers: Dict[str, Optional[Any]]  # {question_id: user_answer (int, str, list, bool, or null)}
     time_taken: Optional[int] = None    # seconds
 
 
@@ -32,10 +32,13 @@ class AttemptResponse(BaseModel):
     wrong:        int
     skipped:      int
     percentage:   float
-    answers:      Optional[Dict[str, Optional[int]]]
+    answers:      Optional[Dict[str, Optional[Any]]]
     ai_feedback:  Optional[str]
     time_taken:   Optional[int]
     attempted_at: datetime
+    # Sprint 2: points-based scoring
+    points_earned: Optional[int] = None
+    points_total:  Optional[int] = None
 
     class Config:
         from_attributes = True
