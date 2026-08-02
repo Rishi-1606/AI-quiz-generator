@@ -132,13 +132,21 @@ def generate_quiz(
     db.add(new_quiz)
     db.flush()  # flush to get new_quiz.id before adding questions
 
-    # Save Questions
+    # Save Questions — dual-write: old columns + new generalized columns
     for index, q in enumerate(ai_questions):
+        options       = q["options"]
+        correct_index = q["correct_option"]
         question = Question(
             quiz_id=new_quiz.id,
             question_text=q["question"],
-            options=q["options"],
-            correct_option=q["correct_option"],
+            # ── DEPRECATED (kept for backward compat until Sprint 12) ──
+            options=options,
+            correct_option=correct_index,
+            # ── New generalized fields (Sprint 1) ─────────────────────
+            type="mcq",
+            payload={"options": options},
+            answer_key={"correct_index": correct_index},
+            points=1,
             explanation=q.get("explanation", ""),
             order_index=index,
         )
@@ -189,12 +197,21 @@ def generate_quiz_from_topic(
     db.add(new_quiz)
     db.flush()
 
+    # Save Questions — dual-write: old columns + new generalized columns
     for index, q in enumerate(ai_questions):
+        options       = q["options"]
+        correct_index = q["correct_option"]
         db.add(Question(
             quiz_id=new_quiz.id,
             question_text=q["question"],
-            options=q["options"],
-            correct_option=q["correct_option"],
+            # ── DEPRECATED (kept for backward compat until Sprint 12) ──
+            options=options,
+            correct_option=correct_index,
+            # ── New generalized fields (Sprint 1) ─────────────────────
+            type="mcq",
+            payload={"options": options},
+            answer_key={"correct_index": correct_index},
+            points=1,
             explanation=q.get("explanation", ""),
             order_index=index,
         ))
