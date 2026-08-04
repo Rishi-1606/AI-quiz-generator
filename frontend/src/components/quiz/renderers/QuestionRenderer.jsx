@@ -14,16 +14,15 @@ import MCQRenderer from './MCQRenderer';
  *   onAnswer   : (questionId, value) => void — called when user selects/types an answer
  */
 
-// ── Registry — add new renderers here as sprints progress ────────────────────
-// Sprint 3 Step 2 will fill in the remaining entries.
+// ── Registry — all supported question type renderers ─────────────────────────
 const RENDERERS = {
   mcq:          MCQRenderer,
-  // true_false   : TrueFalseRenderer,   — added in Sprint 3 Step 2
-  // fill_blank   : FillBlankRenderer,   — added in Sprint 3 Step 2
-  // short_answer : ShortAnswerRenderer, — added in Sprint 3 Step 2
-  // matching     : MatchingRenderer,    — added in Sprint 3 Step 2
-  // ordering     : OrderingRenderer,    — added in Sprint 3 Step 2
-  // numeric      : NumericRenderer,     — added in Sprint 3 Step 2
+  true_false:   TrueFalseRenderer,
+  fill_blank:   FillBlankRenderer,
+  short_answer: ShortAnswerRenderer,
+  numeric:      NumericRenderer,
+  ordering:     OrderingRenderer,
+  matching:     MatchingRenderer,
 };
 
 export default function QuestionRenderer({ question, userAnswer, onAnswer }) {
