@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ChevronLeft, ChevronRight, Clock, CheckCircle2,
+  ChevronLeft, ChevronRight, Clock,
   AlertCircle, Send, Loader2, BookOpen
 } from 'lucide-react';
 import api from '../../services/api';
+import QuestionRenderer from '../../components/quiz/renderers/QuestionRenderer';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -13,8 +14,6 @@ function formatTime(secs) {
   const s = (secs % 60).toString().padStart(2, '0');
   return `${m}:${s}`;
 }
-
-const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -186,31 +185,12 @@ export default function TakeQuiz() {
                 </p>
               </div>
 
-              {/* Options */}
-              <div className="space-y-3">
-                {currentQ.options.map((option, idx) => {
-                  const isSelected = userAnswer === idx;
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() => selectAnswer(currentQ.id, idx)}
-                      className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl border text-left transition-all duration-150 ${
-                        isSelected
-                          ? 'border-primary-500 bg-primary-500/12 text-white'
-                          : 'border-dark-700 bg-dark-800/50 text-dark-300 hover:border-dark-600 hover:text-dark-100'
-                      }`}
-                    >
-                      <span className={`flex-shrink-0 w-7 h-7 rounded-lg text-xs font-bold flex items-center justify-center transition-colors ${
-                        isSelected ? 'bg-primary-500 text-white' : 'bg-dark-700 text-dark-400'
-                      }`}>
-                        {OPTION_LETTERS[idx]}
-                      </span>
-                      <span className="text-sm leading-snug">{option}</span>
-                      {isSelected && <CheckCircle2 className="w-4 h-4 text-primary-400 ml-auto flex-shrink-0" />}
-                    </button>
-                  );
-                })}
-              </div>
+              {/* Question input — rendered by type-aware QuestionRenderer */}
+              <QuestionRenderer
+                question={currentQ}
+                userAnswer={userAnswer ?? null}
+                onAnswer={selectAnswer}
+              />
 
               {/* Navigation buttons */}
               <div className="flex items-center justify-between mt-8 pt-6 border-t border-dark-800">
