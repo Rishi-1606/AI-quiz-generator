@@ -9,6 +9,13 @@ const DIFFICULTY_OPTIONS = [
   { value: 'hard',   label: 'Hard',   color: 'border-red-500/50 bg-red-500/10 text-red-400' },
 ];
 
+const QUESTION_TYPES = [
+  { value: 'mcq',          label: 'MCQ',           desc: '4-option multiple choice' },
+  { value: 'true_false',   label: 'True / False',  desc: 'Binary true or false'     },
+  { value: 'fill_blank',   label: 'Fill in Blank', desc: 'Complete the sentence'    },
+  { value: 'short_answer', label: 'Short Answer',  desc: 'AI-evaluated open text'   },
+];
+
 const TOPIC_SUGGESTIONS = [
   'Python Programming', 'World War II', 'Human Anatomy',
   'Algebra', 'Machine Learning', 'Indian History',
@@ -16,12 +23,21 @@ const TOPIC_SUGGESTIONS = [
 ];
 
 export default function TopicQuizModal({ onClose }) {
-  const navigate     = useNavigate();
+  const navigate             = useNavigate();
   const [topic, setTopic]         = useState('');
   const [numQuestions, setNum]    = useState(5);
   const [difficulty, setDiff]     = useState('medium');
+  const [questionTypes, setTypes] = useState(['mcq']);
   const [isGenerating, setGen]    = useState(false);
   const [error, setError]         = useState('');
+
+  const toggleType = (val) => {
+    setTypes(prev =>
+      prev.includes(val)
+        ? prev.length > 1 ? prev.filter(t => t !== val) : prev
+        : [...prev, val]
+    );
+  };
 
   const handleGenerate = async () => {
     if (!topic.trim()) { setError('Please enter a topic.'); return; }
@@ -32,6 +48,7 @@ export default function TopicQuizModal({ onClose }) {
         topic: topic.trim(),
         num_questions: numQuestions,
         difficulty,
+        question_types: questionTypes,
       });
       navigate(`/quiz/${res.data.id}`);
     } catch (err) {
@@ -123,6 +140,33 @@ export default function TopicQuizModal({ onClose }) {
                   {d.label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Question Types */}
+          <div>
+            <label className="text-dark-300 text-sm font-medium block mb-2">Question Types</label>
+            <div className="grid grid-cols-2 gap-2">
+              {QUESTION_TYPES.map((qt) => {
+                const active = questionTypes.includes(qt.value);
+                return (
+                  <button
+                    key={qt.value}
+                    onClick={() => toggleType(qt.value)}
+                    className={`p-3 rounded-xl border text-left transition-all duration-200 ${
+                      active
+                        ? 'border-primary-500/60 bg-primary-500/12 text-white'
+                        : 'bg-dark-800/50 border-dark-700 text-dark-400 hover:border-dark-600'
+                    }`}
+                  >
+                    <p className="font-semibold text-xs flex items-center gap-1.5">
+                      {active && <span className="w-1.5 h-1.5 rounded-full bg-primary-400 inline-block"/>}
+                      {qt.label}
+                    </p>
+                    <p className="text-xs mt-0.5 opacity-60">{qt.desc}</p>
+                  </button>
+                );
+              })}
             </div>
           </div>
 

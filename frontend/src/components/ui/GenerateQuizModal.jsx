@@ -10,21 +10,38 @@ const DIFFICULTIES = [
   { value: 'hard',   label: 'Hard',   desc: 'Analysis & edge cases',              color: 'text-red-400',     border: 'border-red-500/40',     bg: 'bg-red-500/10'     },
 ];
 
+const QUESTION_TYPES = [
+  { value: 'mcq',          label: 'MCQ',            desc: '4-option multiple choice' },
+  { value: 'true_false',   label: 'True / False',   desc: 'Binary true or false'     },
+  { value: 'fill_blank',   label: 'Fill in Blank',  desc: 'Complete the sentence'    },
+  { value: 'short_answer', label: 'Short Answer',   desc: 'AI-evaluated open text'   },
+];
+
 export default function GenerateQuizModal({ upload, onClose, onSuccess }) {
   const navigate = useNavigate();
-  const [difficulty, setDifficulty]       = useState('medium');
-  const [numQuestions, setNumQuestions]   = useState(5);
-  const [isGenerating, setIsGenerating]   = useState(false);
-  const [error, setError]                 = useState('');
+  const [difficulty, setDifficulty]         = useState('medium');
+  const [numQuestions, setNumQuestions]     = useState(5);
+  const [questionTypes, setQuestionTypes]   = useState(['mcq']);
+  const [isGenerating, setIsGenerating]     = useState(false);
+  const [error, setError]                   = useState('');
+
+  const toggleType = (val) => {
+    setQuestionTypes(prev =>
+      prev.includes(val)
+        ? prev.length > 1 ? prev.filter(t => t !== val) : prev  // keep at least 1
+        : [...prev, val]
+    );
+  };
 
   const handleGenerate = async () => {
     setIsGenerating(true);
     setError('');
     try {
       const res = await api.post('/api/quizzes/generate', {
-        upload_id:     upload.id,
-        num_questions: numQuestions,
+        upload_id:      upload.id,
+        num_questions:  numQuestions,
         difficulty,
+        question_types: questionTypes,
       });
       onSuccess?.(res.data);  // notify parent (for toast)
       navigate(`/quiz/${res.data.id}`);  // navigate to quiz page
@@ -105,6 +122,33 @@ export default function GenerateQuizModal({ upload, onClose, onSuccess }) {
             <div className="flex justify-between text-dark-500 text-xs mt-1">
               <span>3</span>
               <span>15</span>
+            </div>
+          </div>
+
+          {/* Question Types */}
+          <div>
+            <label className="text-dark-300 text-sm font-medium mb-3 block">Question Types</label>
+            <div className="grid grid-cols-2 gap-2">
+              {QUESTION_TYPES.map((qt) => {
+                const active = questionTypes.includes(qt.value);
+                return (
+                  <button
+                    key={qt.value}
+                    onClick={() => toggleType(qt.value)}
+                    className={`p-3 rounded-xl border text-left transition-all duration-200 ${
+                      active
+                        ? 'border-primary-500/60 bg-primary-500/12 text-white'
+                        : 'bg-dark-800/50 border-dark-700 text-dark-400 hover:border-dark-600'
+                    }`}
+                  >
+                    <p className="font-semibold text-sm flex items-center gap-1.5">
+                      {active && <span className="w-1.5 h-1.5 rounded-full bg-primary-400 inline-block"/>}
+                      {qt.label}
+                    </p>
+                    <p className="text-xs mt-0.5 opacity-60">{qt.desc}</p>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
