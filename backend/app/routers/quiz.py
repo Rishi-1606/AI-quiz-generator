@@ -20,18 +20,20 @@ from app.services.grading_service import grade_question
 
 router = APIRouter(prefix="/api/quizzes", tags=["Quizzes"])
 
-# ─── Request schema ──────────────────────────────────────────────────────────
+# ─── Request schemas ────────────────────────────────────────────────────────
 
 class GenerateQuizRequest(BaseModel):
     upload_id: int
-    num_questions: int = 5         # default 5 questions
-    difficulty: str = "medium"     # easy | medium | hard
+    num_questions: int = 5
+    difficulty: str = "medium"
+    question_types: list[str] = ["mcq"]  # Sprint 4: multi-format support
 
 
 class GenerateTopicQuizRequest(BaseModel):
     topic: str
     num_questions: int = 5
     difficulty: str = "medium"
+    question_types: list[str] = ["mcq"]  # Sprint 4: multi-format support
 
 
 # ─── Generate quiz ───────────────────────────────────────────────────────────
@@ -96,6 +98,7 @@ def generate_quiz(
             text=text_chunk,
             num_questions=num_questions,
             difficulty=body.difficulty,
+            question_types=body.question_types,
         )
     except ValueError as e:
         raise HTTPException(
@@ -177,6 +180,7 @@ def generate_quiz_from_topic(
             topic=topic,
             num_questions=body.num_questions,
             difficulty=body.difficulty,
+            question_types=body.question_types,
         )
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"AI service error: {str(e)}")

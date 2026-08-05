@@ -1,4 +1,10 @@
-import MCQRenderer from './MCQRenderer';
+import MCQRenderer         from './MCQRenderer';
+import TrueFalseRenderer   from './TrueFalseRenderer';
+import FillBlankRenderer   from './FillBlankRenderer';
+import ShortAnswerRenderer from './ShortAnswerRenderer';
+import NumericRenderer     from './NumericRenderer';
+import OrderingRenderer    from './OrderingRenderer';
+import MatchingRenderer    from './MatchingRenderer';
 
 /**
  * QuestionRenderer — Dispatcher

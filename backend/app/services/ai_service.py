@@ -2,7 +2,13 @@
 AI Service — Gemini Quiz Generator
 ------------------------------------
 Sends cleaned text chunks to Google Gemini and returns
-structured multiple-choice quiz questions.
+structured quiz questions in multiple formats.
+
+Supported question types (Sprint 4):
+  "mcq"          — Multiple choice (4 options)
+  "true_false"   — True or False
+  "fill_blank"   — Fill in the blank
+  "short_answer" — Open-ended text (AI-graded in Sprint 5)
 
 Usage:
     from app.services.ai_service import generate_questions_from_chunk
@@ -10,11 +16,13 @@ Usage:
     questions = generate_questions_from_chunk(
         text="...cleaned study content...",
         num_questions=5,
-        difficulty="medium"
+        difficulty="medium",
+        question_types=["mcq", "true_false"]
     )
 """
 
 import json
+import random
 from google import genai
 from google.genai import types
 from app.config import GEMINI_API_KEY
@@ -23,170 +31,287 @@ from app.config import GEMINI_API_KEY
 MODEL_NAME = "gemini-3.1-flash-lite"
 
 
-# ─────────────────────────────────────────────────────────
-# PROMPT BUILDER
-# ─────────────────────────────────────────────────────────
+# ─── Helpers ──────────────────────────────────────────────────────────────────
 
-def _build_prompt(text: str, num_questions: int, difficulty: str) -> str:
-    """
-    Build the prompt that instructs Gemini to generate quiz questions.
-    Strictly enforces JSON output so it can be parsed reliably.
-    """
-    return f"""You are an expert quiz creator for college-level students.
-
-Given the following study material, generate exactly {num_questions} multiple-choice questions.
-
-Difficulty level: {difficulty.upper()}
-- easy   : factual recall, straightforward definitions
-- medium : conceptual understanding, application
-- hard   : analysis, evaluation, edge cases
-
-STRICT RULES:
-1. Each question must have exactly 4 options (A, B, C, D).
-2. Only ONE option is correct.
-3. The "correct_option" field must be the index (0 for A, 1 for B, 2 for C, 3 for D).
-4. "explanation" must be 1-2 sentences explaining WHY the correct answer is right.
-5. Questions must be based ONLY on the provided material. Do NOT add outside knowledge.
-6. Output ONLY valid JSON — no markdown, no extra text, no code fences.
-
-OUTPUT FORMAT (return this exact structure):
-[
-  {{
-    "question": "...",
-    "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
-    "correct_option": 0,
-    "explanation": "..."
-  }}
-]
-
-STUDY MATERIAL:
-\"\"\"
-{text}
-\"\"\"
-
-Generate {num_questions} questions now:"""
-
-
-# ─────────────────────────────────────────────────────────
-# CORE FUNCTION
-# ─────────────────────────────────────────────────────────
-
-def generate_questions_from_chunk(
-    text: str,
-    num_questions: int = 5,
-    difficulty: str = "medium",
-) -> list[dict]:
-    """
-    Send a text chunk to Gemini and return a list of parsed question dicts.
-
-    Each returned dict has:
-      - question        (str)
-      - options         (list of 4 str)
-      - correct_option  (int, 0-3)
-      - explanation     (str)
-
-    Raises:
-      ValueError  if Gemini returns unparseable JSON.
-      Exception   for API errors (rate limit, invalid key, etc.)
-    """
-    if not text or not text.strip():
-        return []
-
-    # Clamp num_questions to a safe range (1–15)
-    num_questions = max(1, min(num_questions, 15))
-
-    client = genai.Client(api_key=GEMINI_API_KEY)
-
-    prompt = _build_prompt(text, num_questions, difficulty)
-
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            temperature=0.4,       # Lower = more factual, less creative
-            top_p=0.9,
-            max_output_tokens=4096,
-        ),
-    )
-
-    raw = response.text.strip()
-
-    # Strip markdown code fences if Gemini adds them despite instructions
+def _strip_fences(raw: str) -> str:
+    """Remove markdown code fences that Gemini adds despite instructions."""
+    raw = raw.strip()
     if raw.startswith("```"):
         raw = raw.split("```")[1]
         if raw.startswith("json"):
             raw = raw[4:]
         raw = raw.strip()
     if raw.endswith("```"):
-        raw = raw[: raw.rfind("```")].strip()
+        raw = raw[:raw.rfind("```")].strip()
+    return raw
 
+
+def _parse_json(raw: str) -> list:
+    """Parse JSON from Gemini response, raising ValueError on failure."""
     try:
-        questions = json.loads(raw)
+        return json.loads(raw)
     except json.JSONDecodeError as e:
-        raise ValueError(
-            f"Gemini returned invalid JSON: {e}\nRaw response:\n{raw[:500]}"
-        )
-
-    # Validate each question has required fields
-    validated = []
-    for q in questions:
-        if all(k in q for k in ("question", "options", "correct_option", "explanation")):
-            if isinstance(q["options"], list) and len(q["options"]) == 4:
-                validated.append(q)
-
-    return validated
+        raise ValueError(f"Gemini returned invalid JSON: {e}\nRaw:\n{raw[:500]}")
 
 
-# ─────────────────────────────────────────────────────────
-# TOPIC-BASED QUIZ GENERATOR
-# ─────────────────────────────────────────────────────────
+# ─── Per-type prompt fragments ────────────────────────────────────────────────
 
-def generate_questions_from_topic(
-    topic: str,
-    num_questions: int = 5,
-    difficulty: str = "medium",
-) -> list[dict]:
+# Each fragment tells Gemini the exact JSON shape for that type.
+TYPE_PROMPTS = {
+    "mcq": """
+TYPE: mcq
+JSON shape:
+{
+  "type": "mcq",
+  "question": "Question text here?",
+  "options": ["A. option1", "B. option2", "C. option3", "D. option4"],
+  "correct_option": 1,
+  "explanation": "Why the correct answer is right."
+}
+Rules: exactly 4 options. correct_option is 0-indexed (0=A, 1=B, 2=C, 3=D).
+""",
+
+    "true_false": """
+TYPE: true_false
+JSON shape:
+{
+  "type": "true_false",
+  "question": "A clear statement that is either true or false.",
+  "correct_answer": true,
+  "explanation": "Why this statement is true/false."
+}
+Rules: correct_answer must be a JSON boolean (true or false, not a string).
+""",
+
+    "fill_blank": """
+TYPE: fill_blank
+JSON shape:
+{
+  "type": "fill_blank",
+  "question": "Sentence with ___ where the blank appears.",
+  "text_with_blanks": "The ___ is the powerhouse of the cell.",
+  "accepted_answers": ["mitochondria", "mitochondrion"],
+  "explanation": "Brief explanation of the answer."
+}
+Rules: use exactly ___ (three underscores) to mark blanks. accepted_answers lists all valid spellings.
+""",
+
+    "short_answer": """
+TYPE: short_answer
+JSON shape:
+{
+  "type": "short_answer",
+  "question": "Open-ended question requiring a 1-2 sentence answer.",
+  "reference_answer": "Model answer for grading.",
+  "explanation": "Key points the answer should cover."
+}
+Rules: question must be answerable in 1-3 sentences. reference_answer is used by AI grader.
+""",
+}
+
+
+def _build_type_distribution(question_types: list[str], num_questions: int) -> list[str]:
     """
-    Generate quiz questions from a free-text topic/subject prompt.
-    Uses Gemini's general knowledge instead of a document.
-
-    Returns the same structure as generate_questions_from_chunk:
-      [{ question, options, correct_option, explanation }]
+    Distribute num_questions evenly across requested types.
+    e.g. types=["mcq","true_false"], num=5 -> ["mcq","mcq","mcq","true_false","true_false"]
     """
-    if not topic or not topic.strip():
-        return []
+    if not question_types:
+        question_types = ["mcq"]
+    # Cycle through types to fill num_questions
+    distribution = []
+    for i in range(num_questions):
+        distribution.append(question_types[i % len(question_types)])
+    return distribution
 
-    num_questions = max(1, min(num_questions, 15))
 
-    prompt = f"""You are an expert quiz creator for students and learners.
+# ─── Prompt builders ──────────────────────────────────────────────────────────
 
-Generate exactly {num_questions} multiple-choice questions on the following topic:
-TOPIC: {topic}
+def _build_mixed_prompt(
+    content_section: str,
+    num_questions: int,
+    difficulty: str,
+    question_types: list[str],
+) -> str:
+    """
+    Build a multi-format prompt supporting both document and topic content.
+    content_section: pre-built string like 'STUDY MATERIAL: ...' or 'TOPIC: ...'
+    """
+    type_set = list(dict.fromkeys(question_types))  # deduplicate, preserve order
+    type_fragments = "\n".join(TYPE_PROMPTS[t] for t in type_set if t in TYPE_PROMPTS)
+    distribution = _build_type_distribution(question_types, num_questions)
+    dist_summary = ", ".join(f"{distribution.count(t)}x {t}" for t in type_set)
+
+    return f"""You are an expert quiz creator for students and learners.
+
+Generate exactly {num_questions} quiz questions with this distribution: {dist_summary}.
 
 Difficulty level: {difficulty.upper()}
 - easy   : factual recall, basic definitions
 - medium : conceptual understanding, application
 - hard   : analysis, edge cases, deeper reasoning
 
+QUESTION TYPE SPECS (use EXACTLY these JSON shapes):
+{type_fragments}
+
 STRICT RULES:
-1. Each question must have exactly 4 options (A, B, C, D).
-2. Only ONE option is correct.
-3. "correct_option" must be the index (0 for A, 1 for B, 2 for C, 3 for D).
-4. "explanation" must be 1-2 sentences explaining WHY the correct answer is right.
-5. Use accurate, widely-accepted knowledge for this topic.
-6. Output ONLY valid JSON — no markdown, no extra text, no code fences.
+1. Output ONLY a valid JSON array — no markdown, no code fences, no extra text.
+2. Each object in the array must have a "type" field matching the spec above.
+3. Generate the distribution specified: {dist_summary}.
+4. Every question must have an "explanation" field.
+5. Questions must be based ONLY on the provided content.
+6. Do NOT mix up the JSON shapes between types.
 
-OUTPUT FORMAT:
-[
-  {{
-    "question": "...",
-    "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
-    "correct_option": 0,
-    "explanation": "..."
-  }}
-]
+{content_section}
 
-Generate {num_questions} questions on "{topic}" now:"""
+Return ONLY the JSON array with exactly {num_questions} questions now:"""
+
+
+# ─── Validator ────────────────────────────────────────────────────────────────
+
+def _validate_question(q: dict) -> dict | None:
+    """
+    Validate a question dict from Gemini and normalize it to
+    the internal format used by the quiz router (always has
+    'question', 'options', 'correct_option', 'explanation' + new fields).
+    Returns None if invalid.
+    """
+    q_type = q.get("type", "mcq")
+
+    if q_type == "mcq":
+        if not all(k in q for k in ("question", "options", "correct_option", "explanation")):
+            return None
+        if not isinstance(q["options"], list) or len(q["options"]) != 4:
+            return None
+        return {
+            "type":           "mcq",
+            "question":       q["question"],
+            "options":        q["options"],
+            "correct_option": int(q["correct_option"]),
+            "explanation":    q.get("explanation", ""),
+            # New generalized fields
+            "payload":    {"options": q["options"]},
+            "answer_key": {"correct_index": int(q["correct_option"])},
+        }
+
+    elif q_type == "true_false":
+        if not all(k in q for k in ("question", "correct_answer", "explanation")):
+            return None
+        correct = q["correct_answer"]
+        if not isinstance(correct, bool):
+            # Try to coerce string "true"/"false"
+            if isinstance(correct, str):
+                correct = correct.lower() == "true"
+            else:
+                return None
+        return {
+            "type":           "true_false",
+            "question":       q["question"],
+            "options":        ["True", "False"],          # for legacy compat display
+            "correct_option": 0 if correct else 1,        # legacy compat
+            "explanation":    q.get("explanation", ""),
+            "payload":    {},
+            "answer_key": {"correct": correct},
+        }
+
+    elif q_type == "fill_blank":
+        if not all(k in q for k in ("question", "accepted_answers", "explanation")):
+            return None
+        answers = q["accepted_answers"]
+        if isinstance(answers, str):
+            answers = [answers]
+        return {
+            "type":           "fill_blank",
+            "question":       q["question"],
+            "options":        [],                          # no options for this type
+            "correct_option": 0,                          # placeholder
+            "explanation":    q.get("explanation", ""),
+            "payload":    {"text_with_blanks": q.get("text_with_blanks", q["question"])},
+            "answer_key": {"accepted_answers": answers},
+        }
+
+    elif q_type == "short_answer":
+        if not all(k in q for k in ("question", "reference_answer", "explanation")):
+            return None
+        return {
+            "type":           "short_answer",
+            "question":       q["question"],
+            "options":        [],
+            "correct_option": 0,
+            "explanation":    q.get("explanation", ""),
+            "payload":    {},
+            "answer_key": {"reference_answer": q["reference_answer"]},
+        }
+
+    return None  # unknown type
+
+
+# ─────────────────────────────────────────────────────────
+# PUBLIC API
+# ─────────────────────────────────────────────────────────
+
+def generate_questions_from_chunk(
+    text: str,
+    num_questions: int = 5,
+    difficulty: str = "medium",
+    question_types: list[str] | None = None,
+) -> list[dict]:
+    """
+    Send a text chunk to Gemini and return a list of parsed question dicts.
+
+    question_types: list of type strings, e.g. ["mcq", "true_false"].
+                    Defaults to ["mcq"] for full backward compatibility.
+    """
+    if not text or not text.strip():
+        return []
+    if question_types is None:
+        question_types = ["mcq"]
+
+    num_questions = max(1, min(num_questions, 15))
+    content_section = f'STUDY MATERIAL:\n"""\n{text[:4000]}\n"""'
+    prompt = _build_mixed_prompt(content_section, num_questions, difficulty, question_types)
+
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    response = client.models.generate_content(
+        model=MODEL_NAME,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            temperature=0.4,
+            top_p=0.9,
+            max_output_tokens=4096,
+        ),
+    )
+
+    raw = _strip_fences(response.text)
+    questions = _parse_json(raw)
+
+    validated = []
+    for q in questions:
+        result = _validate_question(q)
+        if result:
+            validated.append(result)
+
+    return validated
+
+
+def generate_questions_from_topic(
+    topic: str,
+    num_questions: int = 5,
+    difficulty: str = "medium",
+    question_types: list[str] | None = None,
+) -> list[dict]:
+    """
+    Generate quiz questions from a free-text topic using Gemini's knowledge.
+
+    question_types: defaults to ["mcq"] for backward compatibility.
+    """
+    if not topic or not topic.strip():
+        return []
+    if question_types is None:
+        question_types = ["mcq"]
+
+    num_questions = max(1, min(num_questions, 15))
+    content_section = f"TOPIC: {topic}\nUse accurate, widely-accepted knowledge for this topic."
+    prompt = _build_mixed_prompt(content_section, num_questions, difficulty, question_types)
 
     client = genai.Client(api_key=GEMINI_API_KEY)
     response = client.models.generate_content(
@@ -199,25 +324,14 @@ Generate {num_questions} questions on "{topic}" now:"""
         ),
     )
 
-    raw = response.text.strip()
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-        raw = raw.strip()
-    if raw.endswith("```"):
-        raw = raw[:raw.rfind("```")].strip()
-
-    try:
-        questions = json.loads(raw)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Gemini returned invalid JSON: {e}\nRaw:\n{raw[:500]}")
+    raw = _strip_fences(response.text)
+    questions = _parse_json(raw)
 
     validated = []
     for q in questions:
-        if all(k in q for k in ("question", "options", "correct_option", "explanation")):
-            if isinstance(q["options"], list) and len(q["options"]) == 4:
-                validated.append(q)
+        result = _validate_question(q)
+        if result:
+            validated.append(result)
 
     return validated
 
@@ -236,27 +350,19 @@ def generate_feedback(
     Given a list of questions the user got wrong, ask Gemini to produce
     a short, personalized study recommendation.
 
-    Each item in wrong_questions should have:
-      - question_text (str)
-      - correct_option (int)
-      - options        (list[str])
-      - explanation    (str)
-
-    Returns a plain-text string (2–4 sentences).
+    Returns a plain-text string (2-4 sentences).
     Returns empty string on any failure (feedback is optional, not critical).
     """
     if not wrong_questions:
-        # Perfect score — return a congratulatory message
         return (
             f"Excellent work! You answered all {total} questions correctly on the "
             f"{difficulty} difficulty quiz. You have a strong grasp of this material. "
             "Consider trying the hard difficulty next!"
         )
 
-    # Build a compact summary of mistakes for the prompt
     mistake_lines = []
-    for i, q in enumerate(wrong_questions[:5], 1):   # cap at 5 to save tokens
-        correct_text = q["options"][q["correct_option"]] if q["options"] else "—"
+    for i, q in enumerate(wrong_questions[:5], 1):
+        correct_text = q["options"][q["correct_option"]] if q.get("options") else "—"
         mistake_lines.append(
             f"{i}. Q: {q['question_text']}\n"
             f"   Correct answer: {correct_text}\n"
@@ -289,7 +395,7 @@ Write a SHORT (2-4 sentences) personalized study recommendation for this student
         )
         return response.text.strip()
     except Exception:
-        return ""   # Feedback is optional — swallow errors silently
+        return ""
 
 
 # ─────────────────────────────────────────────────────────
@@ -299,11 +405,7 @@ Write a SHORT (2-4 sentences) personalized study recommendation for this student
 def generate_flashcards(text: str, num_cards: int = 10) -> list[dict]:
     """
     Extract key concept flashcards from study material.
-
-    Returns a list of dicts:
-      { "front": "Term / Question", "back": "Definition / Answer" }
-
-    Returns empty list on failure.
+    Returns: [{ "front": "Term / Question", "back": "Definition / Answer" }]
     """
     if not text or not text.strip():
         return []
@@ -343,17 +445,7 @@ Generate {num_cards} flashcards now:"""
                 max_output_tokens=2048,
             ),
         )
-        raw = response.text.strip()
-
-        # Strip markdown fences if present
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-            raw = raw.strip()
-        if raw.endswith("```"):
-            raw = raw[:raw.rfind("```")].strip()
-
+        raw = _strip_fences(response.text)
         cards = json.loads(raw)
         return [c for c in cards if "front" in c and "back" in c]
     except Exception:
