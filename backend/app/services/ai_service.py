@@ -398,6 +398,91 @@ Write a SHORT (2-4 sentences) personalized study recommendation for this student
         return ""
 
 
+
+# ─────────────────────────────────────────────────────────
+# SHORT ANSWER AI GRADER  (Sprint 5)
+# ─────────────────────────────────────────────────────────
+
+def grade_short_answer_with_ai(
+    question_text: str,
+    reference_answer: str,
+    user_answer: str,
+    points: int = 1,
+) -> dict:
+    """
+    Ask Gemini to evaluate a student's free-text response against the
+    reference answer and return a structured grading result.
+
+    Returns a dict:
+    {
+        "correct":       bool,   # True if score >= 0.6
+        "score":         float,  # 0.0 – 1.0
+        "points_earned": int,    # floor(score * points)
+        "ai_feedback":   str,    # 1-2 sentence feedback to the student
+    }
+
+    On any failure (API error, parse error), returns:
+    { "correct": False, "score": 0.0, "points_earned": 0, "ai_feedback": "" }
+    """
+    if not user_answer or not user_answer.strip():
+        return {"correct": False, "score": 0.0, "points_earned": 0, "ai_feedback": "No answer provided."}
+
+    prompt = f"""You are an expert educational grader evaluating a student's short-answer response.
+
+QUESTION: {question_text}
+
+REFERENCE ANSWER (model answer): {reference_answer}
+
+STUDENT'S ANSWER: {user_answer}
+
+Evaluate the student's answer on a scale of 0.0 to 1.0:
+- 1.0 = fully correct, covers all key points
+- 0.6-0.9 = mostly correct, minor gaps or imprecision
+- 0.3-0.5 = partially correct, important points missing
+- 0.0-0.2 = incorrect or off-topic
+
+STRICT RULES:
+1. Output ONLY valid JSON — no markdown, no code fences, no extra text.
+2. Be concise but constructive in your feedback (max 2 sentences).
+3. Feedback must be written in second person ("You...").
+
+OUTPUT FORMAT:
+{{
+  "score": 0.8,
+  "feedback": "Your answer correctly identifies the main concept but misses the role of chlorophyll."
+}}"""
+
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.2,        # Low temp for consistent grading
+                max_output_tokens=256,
+            ),
+        )
+        raw = _strip_fences(response.text)
+        result = json.loads(raw)
+
+        score         = float(result.get("score", 0.0))
+        score         = max(0.0, min(1.0, score))        # clamp to [0, 1]
+        correct       = score >= 0.6
+        points_earned = round(score * points)
+        feedback      = result.get("feedback", "")
+
+        return {
+            "correct":       correct,
+            "score":         score,
+            "points_earned": points_earned,
+            "ai_feedback":   feedback,
+        }
+
+    except Exception:
+        # Grading failure is non-fatal — return zero score silently
+        return {"correct": False, "score": 0.0, "points_earned": 0, "ai_feedback": ""}
+
+
 # ─────────────────────────────────────────────────────────
 # FLASHCARD GENERATOR
 # ─────────────────────────────────────────────────────────

@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from typing import Any, Optional
 import json
 
+from app.services.ai_service import grade_short_answer_with_ai
+
 
 @dataclass
 class GradeResult:
@@ -115,11 +117,35 @@ def _grade_fill_blank(question, user_answer: Optional[str]) -> GradeResult:
 
 def _grade_short_answer(question, user_answer: Optional[str]) -> GradeResult:
     """
-    Placeholder — AI grading wired up in Sprint 5.
-    For now: always returns correct=False, points_earned=0 so it doesn't crash.
+    AI-graded short answer (Sprint 5).
+    Calls Gemini to score the student's free-text response 0.0-1.0
+    against the reference answer stored in answer_key.
+    Score >= 0.6 = correct. Points awarded proportionally.
+    Falls back to GradeResult(correct=False, points_earned=0) on any error.
     """
-    # TODO Sprint 5: call ai_service.grade_open_response()
-    return GradeResult(correct=False, points_earned=0)
+    if not user_answer or not isinstance(user_answer, str) or not user_answer.strip():
+        return GradeResult(correct=False, points_earned=0)
+
+    answer_key     = _parse_json(question.answer_key) or {}
+    reference      = answer_key.get("reference_answer", "")
+    question_text  = getattr(question, "question_text", "")
+    points         = getattr(question, "points", 1) or 1
+
+    if not reference:
+        # No reference answer stored — cannot grade, give benefit of doubt: 0 pts
+        return GradeResult(correct=False, points_earned=0)
+
+    result = grade_short_answer_with_ai(
+        question_text=question_text,
+        reference_answer=reference,
+        user_answer=user_answer,
+        points=points,
+    )
+
+    return GradeResult(
+        correct=result["correct"],
+        points_earned=result["points_earned"],
+    )
 
 
 # ─── Matching ─────────────────────────────────────────────────────────────────
