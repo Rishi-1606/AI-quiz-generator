@@ -11,7 +11,11 @@ from app.models.upload import Upload
 from app.models.quiz import Quiz
 from app.models.question import Question
 from app.models.attempt import Attempt
-from app.schemas.quiz import QuizResponse, QuizSummaryResponse
+from app.schemas.quiz import (
+    QuizResponse, 
+    QuizSummaryResponse,
+    QuizWithAnswersResponse
+)
 from app.schemas.attempt import SubmitQuizRequest, AttemptResponse
 from app.middleware.auth import get_current_user
 from app.services.text_processor import process_text
@@ -385,6 +389,26 @@ def get_quiz(
     current_user: User = Depends(get_current_user),
 ):
     """Return a single quiz with all its questions."""
+    quiz = (
+        db.query(Quiz)
+        .filter(Quiz.id == quiz_id, Quiz.user_id == current_user.id)
+        .first()
+    )
+    if not quiz:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Quiz not found.",
+        )
+    return quiz
+
+
+@router.get("/{quiz_id}/with-answers", response_model=QuizWithAnswersResponse)
+def get_quiz_with_answers(
+    quiz_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return a single quiz with all its questions AND their answer keys. Used for Results page."""
     quiz = (
         db.query(Quiz)
         .filter(Quiz.id == quiz_id, Quiz.user_id == current_user.id)

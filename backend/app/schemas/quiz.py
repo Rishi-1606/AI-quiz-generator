@@ -39,6 +39,16 @@ class QuizResponse(BaseModel):
         from_attributes = True
 
 
+class QuestionWithAnswersResponse(QuestionResponse):
+    """Used for Results/Export — includes the answer_key."""
+    answer_key: Optional[Dict[str, Any]] = None
+
+
+class QuizWithAnswersResponse(QuizResponse):
+    """Used for Results/Export — includes all questions with their answer_keys."""
+    questions: List[QuestionWithAnswersResponse]
+
+
 class QuizSummaryResponse(BaseModel):
     """Lightweight quiz card — used in list views (no questions)."""
     id: int

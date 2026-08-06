@@ -162,17 +162,17 @@ export default function QuizResults() {
 
   // Results can come via navigation state (immediate) or fetched fresh
   const [attempt, setAttempt] = useState(location.state?.attempt ?? null);
-  const [quiz,    setQuiz]    = useState(location.state?.quiz    ?? null);
-  const [isLoading, setIsLoading] = useState(!attempt || !quiz);
+  const [quiz,    setQuiz]    = useState(null); // Always fetch fresh to get answer_keys!
+  const [isLoading, setIsLoading] = useState(true);
   const [error,     setError]     = useState('');
   const [showExport, setShowExport] = useState(false);
   const exportRef = useRef(null);
 
   useEffect(() => {
-    if (attempt && quiz) return; // already have data from navigation state
+    if (attempt && quiz) return; // Wait until quiz is fetched
     const fetchData = async () => {
       try {
-        const quizRes = await api.get(`/api/quizzes/${quizId}`);
+        const quizRes = await api.get(`/api/quizzes/${quizId}/with-answers`);
         setQuiz(quizRes.data);
         // Attempt must have been passed via state; if not, show error
         if (!attempt) {
