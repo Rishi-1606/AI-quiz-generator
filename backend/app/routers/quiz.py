@@ -138,18 +138,16 @@ def generate_quiz(
 
     # Save Questions — dual-write: old columns + new generalized columns
     for index, q in enumerate(ai_questions):
-        options       = q["options"]
-        correct_index = q["correct_option"]
         question = Question(
             quiz_id=new_quiz.id,
             question_text=q["question"],
             # ── DEPRECATED (kept for backward compat until Sprint 12) ──
-            options=options,
-            correct_option=correct_index,
+            options=q.get("options", []),
+            correct_option=q.get("correct_option", 0),
             # ── New generalized fields (Sprint 1) ─────────────────────
-            type="mcq",
-            payload={"options": options},
-            answer_key={"correct_index": correct_index},
+            type=q.get("type", "mcq"),
+            payload=q.get("payload", {}),
+            answer_key=q.get("answer_key", {}),
             points=1,
             explanation=q.get("explanation", ""),
             order_index=index,
@@ -204,18 +202,16 @@ def generate_quiz_from_topic(
 
     # Save Questions — dual-write: old columns + new generalized columns
     for index, q in enumerate(ai_questions):
-        options       = q["options"]
-        correct_index = q["correct_option"]
         db.add(Question(
             quiz_id=new_quiz.id,
             question_text=q["question"],
             # ── DEPRECATED (kept for backward compat until Sprint 12) ──
-            options=options,
-            correct_option=correct_index,
+            options=q.get("options", []),
+            correct_option=q.get("correct_option", 0),
             # ── New generalized fields (Sprint 1) ─────────────────────
-            type="mcq",
-            payload={"options": options},
-            answer_key={"correct_index": correct_index},
+            type=q.get("type", "mcq"),
+            payload=q.get("payload", {}),
+            answer_key=q.get("answer_key", {}),
             points=1,
             explanation=q.get("explanation", ""),
             order_index=index,

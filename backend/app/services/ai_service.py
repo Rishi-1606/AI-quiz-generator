@@ -143,6 +143,10 @@ def _build_mixed_prompt(
 
     return f"""You are an expert quiz creator for students and learners.
 
+CRITICAL WARNING: You MUST ONLY generate questions of these types: {type_set}.
+Do NOT generate MCQ (multiple-choice with 4 options) unless "mcq" is in that list.
+Any question with a "type" not in {type_set} will be rejected entirely.
+
 Generate exactly {num_questions} quiz questions with this distribution: {dist_summary}.
 
 Difficulty level: {difficulty.upper()}
@@ -155,11 +159,11 @@ QUESTION TYPE SPECS (use EXACTLY these JSON shapes):
 
 STRICT RULES:
 1. Output ONLY a valid JSON array — no markdown, no code fences, no extra text.
-2. Each object in the array must have a "type" field matching the spec above.
+2. Each object MUST have a "type" field that is exactly one of: {type_set}.
 3. Generate the distribution specified: {dist_summary}.
 4. Every question must have an "explanation" field.
 5. Questions must be based ONLY on the provided content.
-6. Do NOT mix up the JSON shapes between types.
+6. Do NOT generate options/correct_option fields for non-mcq types.
 
 {content_section}
 
@@ -168,14 +172,17 @@ Return ONLY the JSON array with exactly {num_questions} questions now:"""
 
 # ─── Validator ────────────────────────────────────────────────────────────────
 
-def _validate_question(q: dict) -> dict | None:
+def _validate_question(q: dict, allowed_types: list[str] | None = None) -> dict | None:
     """
-    Validate a question dict from Gemini and normalize it to
-    the internal format used by the quiz router (always has
-    'question', 'options', 'correct_option', 'explanation' + new fields).
-    Returns None if invalid.
+    Validate a question dict from Gemini.
+    - Rejects questions with missing or wrong 'type' field.
+    - If allowed_types is given, also rejects types not in that list.
     """
-    q_type = q.get("type", "mcq")
+    q_type = q.get("type")              # No default — type is required
+    if not q_type:
+        return None                     # Reject questions with no type field
+    if allowed_types and q_type not in allowed_types:
+        return None                     # Reject wrong types
 
     if q_type == "mcq":
         if not all(k in q for k in ("question", "options", "correct_option", "explanation")):
@@ -286,7 +293,7 @@ def generate_questions_from_chunk(
 
     validated = []
     for q in questions:
-        result = _validate_question(q)
+        result = _validate_question(q, allowed_types=question_types)
         if result:
             validated.append(result)
 
@@ -329,7 +336,7 @@ def generate_questions_from_topic(
 
     validated = []
     for q in questions:
-        result = _validate_question(q)
+        result = _validate_question(q, allowed_types=question_types)
         if result:
             validated.append(result)
 
