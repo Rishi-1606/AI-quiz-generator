@@ -25,6 +25,134 @@ function getScoreLabel(pct) {
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
 
+// ─── Type-aware helpers ───────────────────────────────────────────────────────
+
+function tryParseJson(val) {
+  if (!val) return null;
+  if (typeof val === 'object') return val;
+  try { return JSON.parse(val); } catch { return null; }
+}
+
+function getQuestionStatus(q, userAnswer) {
+  if (userAnswer === undefined || userAnswer === null) return 'skipped';
+  const type = q.type ?? 'mcq';
+  const ak   = tryParseJson(q.answer_key);
+
+  if (type === 'mcq') {
+    return userAnswer === q.correct_option ? 'correct' : 'wrong';
+  }
+  if (type === 'true_false') {
+    return userAnswer === ak?.correct ? 'correct' : 'wrong';
+  }
+  if (type === 'fill_blank') {
+    const accepted = ak?.accepted_answers ?? [];
+    const norm = s => String(s ?? '').trim().toLowerCase();
+    return accepted.some(a => norm(a) === norm(userAnswer)) ? 'correct' : 'wrong';
+  }
+  if (type === 'short_answer') return 'ai_graded';
+  return 'submitted';   // ordering / matching
+}
+
+function AnswerDisplay({ q, userAnswer }) {
+  const type = q.type ?? 'mcq';
+  const ak   = tryParseJson(q.answer_key);
+  const payload = tryParseJson(q.payload);
+
+  // ── MCQ ──
+  if (type === 'mcq') {
+    const opts = payload?.options ?? q.options ?? [];
+    return (
+      <div className="space-y-2 ml-8">
+        {opts.map((option, oi) => {
+          const isUserPick   = userAnswer === oi;
+          const isCorrectOpt = (ak?.correct_index ?? q.correct_option) === oi;
+          let optClass = 'border-dark-700 bg-dark-800/50 text-dark-400';
+          if (isCorrectOpt)                 optClass = 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300';
+          if (isUserPick && !isCorrectOpt)  optClass = 'border-red-500/50 bg-red-500/10 text-red-300';
+          return (
+            <div key={oi} className={`flex items-center gap-3 px-3 py-2 rounded-xl border text-sm ${optClass}`}>
+              <span className="font-bold text-xs w-5 text-center">{OPTION_LETTERS[oi]}</span>
+              <span className="flex-1">{option}</span>
+              {isCorrectOpt && <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
+              {isUserPick && !isCorrectOpt && <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // ── True / False ──
+  if (type === 'true_false') {
+    const correct = ak?.correct;
+    return (
+      <div className="flex gap-3 ml-8">
+        {[true, false].map(val => {
+          const label = val ? 'True' : 'False';
+          const isCorrect = val === correct;
+          const isUser    = userAnswer === val;
+          let cls = 'border-dark-700 bg-dark-800/50 text-dark-400';
+          if (isCorrect)             cls = 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300';
+          if (isUser && !isCorrect)  cls = 'border-red-500/50 bg-red-500/10 text-red-300';
+          return (
+            <div key={label} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-semibold ${cls}`}>
+              {isCorrect && <CheckCircle2 className="w-4 h-4" />}
+              {isUser && !isCorrect && <XCircle className="w-4 h-4" />}
+              {label}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // ── Fill in the Blank ──
+  if (type === 'fill_blank') {
+    const accepted = ak?.accepted_answers ?? [];
+    const isRight  = accepted.some(a => String(a).trim().toLowerCase() === String(userAnswer ?? '').trim().toLowerCase());
+    return (
+      <div className="ml-8 space-y-2">
+        <div className={`px-3 py-2 rounded-xl border text-sm ${isRight ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300' : 'border-red-500/50 bg-red-500/10 text-red-300'}`}>
+          <span className="font-semibold">Your answer: </span>{userAnswer ?? '—'}
+        </div>
+        {!isRight && accepted.length > 0 && (
+          <div className="px-3 py-2 rounded-xl border border-emerald-500/40 bg-emerald-500/8 text-emerald-300 text-sm">
+            <span className="font-semibold">Accepted: </span>{accepted.join(' / ')}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Short Answer (AI-graded) ──
+  if (type === 'short_answer') {
+    const reference = ak?.reference_answer ?? '';
+    return (
+      <div className="ml-8 space-y-2">
+        <div className="px-3 py-2.5 rounded-xl border border-primary-500/30 bg-primary-500/8 text-dark-200 text-sm">
+          <div className="flex items-center gap-2 mb-1">
+            <Brain className="w-3.5 h-3.5 text-primary-400" />
+            <span className="text-primary-400 text-xs font-semibold">AI Graded</span>
+          </div>
+          <span className="font-semibold text-dark-400">Your answer: </span>{userAnswer ?? '—'}
+        </div>
+        {reference && (
+          <div className="px-3 py-2 rounded-xl border border-dark-600 bg-dark-800/60 text-dark-300 text-sm">
+            <span className="font-semibold text-dark-400">Reference answer: </span>{reference}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Ordering / Matching (submitted — no frontend correctness check) ──
+  return (
+    <div className="ml-8 px-3 py-2 rounded-xl border border-dark-600 bg-dark-800/50 text-dark-400 text-sm">
+      Answer submitted.
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function QuizResults() {
@@ -161,9 +289,12 @@ export default function QuizResults() {
           </div>
 
           <p className={`text-xl font-bold mb-1 ${scoreColor}`}>{scoreLabel}</p>
-          <p className="text-dark-400 text-sm mb-8">
+          <p className="text-dark-400 text-sm mb-6">
             You scored <span className="text-white font-semibold">{attempt.correct}</span> out of{' '}
             <span className="text-white font-semibold">{attempt.total}</span> questions
+            {attempt.points_total > 0 && (
+              <span className="text-dark-500"> &nbsp;·&nbsp; <span className="text-primary-400 font-semibold">{attempt.points_earned ?? attempt.correct}</span> / {attempt.points_total} pts</span>
+            )}
           </p>
 
           {/* Stats row */}
@@ -206,45 +337,38 @@ export default function QuizResults() {
 
           <div className="space-y-4">
             {quiz?.questions?.map((q, idx) => {
-              const userChoice    = answers[String(q.id)];
-              const isCorrect     = userChoice === q.correct_option;
-              const isSkipped     = userChoice === undefined || userChoice === null;
+              const userAnswer = answers[String(q.id)];
+              const status     = getQuestionStatus(q, userAnswer);
+              const isSkipped  = status === 'skipped';
+              const isCorrect  = status === 'correct';
+              const isAiGraded = status === 'ai_graded';
+              const isSubmitted = status === 'submitted';
 
-              let statusColor  = 'border-yellow-500/30 bg-yellow-500/5';
-              let statusIcon   = <MinusCircle className="w-5 h-5 text-yellow-400 flex-shrink-0" />;
-              if (!isSkipped && isCorrect)  { statusColor = 'border-emerald-500/30 bg-emerald-500/5'; statusIcon = <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />; }
-              if (!isSkipped && !isCorrect) { statusColor = 'border-red-500/30 bg-red-500/5';         statusIcon = <XCircle      className="w-5 h-5 text-red-400 flex-shrink-0"     />; }
+              let statusColor = 'border-yellow-500/30 bg-yellow-500/5';
+              let statusIcon  = <MinusCircle className="w-5 h-5 text-yellow-400 flex-shrink-0" />;
+              if (isCorrect)                                { statusColor = 'border-emerald-500/30 bg-emerald-500/5'; statusIcon = <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />; }
+              if (!isSkipped && !isCorrect && !isAiGraded && !isSubmitted) { statusColor = 'border-red-500/30 bg-red-500/5';     statusIcon = <XCircle      className="w-5 h-5 text-red-400     flex-shrink-0" />; }
+              if (isAiGraded)                               { statusColor = 'border-primary-500/30 bg-primary-500/5'; statusIcon = <Brain        className="w-5 h-5 text-primary-400  flex-shrink-0" />; }
 
               return (
                 <div key={q.id} className={`border rounded-2xl p-5 ${statusColor}`}>
-                  {/* Question text */}
+                  {/* Type badge + question text */}
                   <div className="flex items-start gap-3 mb-4">
                     {statusIcon}
-                    <p className="text-dark-100 text-sm font-medium leading-relaxed">
-                      <span className="text-dark-400 mr-2">Q{idx + 1}.</span>{q.question_text}
-                    </p>
+                    <div className="flex-1">
+                      {q.type && q.type !== 'mcq' && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-dark-700 text-dark-400 font-medium mb-1 inline-block capitalize">
+                          {q.type.replace('_', ' ')}
+                        </span>
+                      )}
+                      <p className="text-dark-100 text-sm font-medium leading-relaxed">
+                        <span className="text-dark-400 mr-2">Q{idx + 1}.</span>{q.question_text}
+                      </p>
+                    </div>
                   </div>
 
-                  {/* Options */}
-                  <div className="space-y-2 ml-8">
-                    {q.options.map((option, oi) => {
-                      const isUserPick    = userChoice === oi;
-                      const isCorrectOpt  = q.correct_option === oi;
-
-                      let optClass = 'border-dark-700 bg-dark-800/50 text-dark-400';
-                      if (isCorrectOpt)              optClass = 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300';
-                      if (isUserPick && !isCorrect)  optClass = 'border-red-500/50 bg-red-500/10 text-red-300';
-
-                      return (
-                        <div key={oi} className={`flex items-center gap-3 px-3 py-2 rounded-xl border text-sm ${optClass}`}>
-                          <span className="font-bold text-xs w-5 text-center">{OPTION_LETTERS[oi]}</span>
-                          <span className="flex-1">{option}</span>
-                          {isCorrectOpt && <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
-                          {isUserPick && !isCorrect && <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {/* Type-aware answer display */}
+                  <AnswerDisplay q={q} userAnswer={userAnswer} />
 
                   {/* Explanation */}
                   {q.explanation && (
