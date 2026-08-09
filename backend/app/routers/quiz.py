@@ -422,6 +422,181 @@ def get_quiz_with_answers(
     return quiz
 
 
+# ─── Export helpers (type-aware) ─────────────────────────────────────────────
+
+def _parse_json_field(value):
+    """Safely parse a JSON column that may already be a dict or a JSON string."""
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return value
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
+OPTION_LETTERS = ["A", "B", "C", "D"]
+
+
+def _format_question_txt(i: int, q, include_answers: bool) -> list:
+    """
+    Return a list of text lines for question i of any question type.
+    Used for the per-question body in TXT export.
+    """
+    q_type  = getattr(q, "type", "mcq") or "mcq"
+    payload = _parse_json_field(q.payload)
+    ak      = _parse_json_field(q.answer_key)
+    lines   = []
+
+    lines.append(f"Q{i}. [{q_type.upper()}] {q.question_text}")
+
+    if q_type == "mcq":
+        opts = payload.get("options") or q.options or []
+        for j, opt in enumerate(opts):
+            lines.append(f"    {OPTION_LETTERS[j]}) {opt}")
+        if include_answers:
+            idx = ak.get("correct_index", q.correct_option or 0)
+            lines.append(f"    ✔ Answer: {OPTION_LETTERS[idx]}")
+            if q.explanation:
+                lines.append(f"    💬 {q.explanation}")
+
+    elif q_type == "true_false":
+        if include_answers:
+            correct = ak.get("correct")
+            val = "True" if correct else "False"
+            lines.append(f"    ✔ Answer: {val}")
+            if q.explanation:
+                lines.append(f"    💬 {q.explanation}")
+
+    elif q_type == "fill_blank":
+        prompt = payload.get("text_with_blanks") or q.question_text
+        if prompt != q.question_text:
+            lines.append(f"    Fill in: {prompt}")
+        if include_answers:
+            accepted = ak.get("accepted_answers", [])
+            lines.append(f"    ✔ Accepted: {' / '.join(accepted)}")
+            if q.explanation:
+                lines.append(f"    💬 {q.explanation}")
+
+    elif q_type == "short_answer":
+        if include_answers:
+            ref = ak.get("reference_answer", "")
+            lines.append(f"    ✔ Reference Answer: {ref}")
+            if q.explanation:
+                lines.append(f"    💬 {q.explanation}")
+
+    elif q_type == "matching":
+        left  = payload.get("left", [])
+        right = payload.get("right", [])
+        lines.append("    Left items:")
+        for j, item in enumerate(left, 1):
+            lines.append(f"      {j}. {item}")
+        lines.append("    Right items:")
+        for j, item in enumerate(right):
+            lines.append(f"      {OPTION_LETTERS[j]}. {item}")
+        if include_answers:
+            pairs = ak.get("pairs", [])
+            pair_strs = [f"{p[0]+1}→{OPTION_LETTERS[p[1]]}" for p in pairs if len(p) == 2]
+            lines.append(f"    ✔ Pairs: {', '.join(pair_strs)}")
+            if q.explanation:
+                lines.append(f"    💬 {q.explanation}")
+
+    elif q_type == "ordering":
+        items = payload.get("items", [])
+        lines.append("    Arrange in correct order:")
+        for j, item in enumerate(items, 1):
+            lines.append(f"      {j}. {item}")
+        if include_answers:
+            correct_order = ak.get("correct_order", [])
+            order_strs = [str(idx + 1) for idx in correct_order]
+            lines.append(f"    ✔ Correct order: {', '.join(order_strs)}")
+            if q.explanation:
+                lines.append(f"    💬 {q.explanation}")
+
+    elif q_type == "numeric":
+        unit = payload.get("unit") or ""
+        if unit:
+            lines.append(f"    Enter a numeric value in {unit}:")
+        if include_answers:
+            value     = ak.get("value", "")
+            tolerance = ak.get("tolerance")
+            tol_str   = f"  (±{tolerance} {unit})".rstrip() if tolerance else ""
+            lines.append(f"    ✔ Answer: {value}{tol_str}")
+            if q.explanation:
+                lines.append(f"    💬 {q.explanation}")
+
+    lines.append("")
+    return lines
+
+
+def _format_answer_key_line(i: int, q) -> list:
+    """
+    Return a compact answer-key line for question i (used in the answer-key
+    block at the bottom of a TXT export when include_answers=False).
+    """
+    q_type  = getattr(q, "type", "mcq") or "mcq"
+    payload = _parse_json_field(q.payload)
+    ak      = _parse_json_field(q.answer_key)
+
+    if q_type == "mcq":
+        idx = ak.get("correct_index", q.correct_option or 0)
+        return [f"Q{i}: {OPTION_LETTERS[idx]}"]
+
+    if q_type == "true_false":
+        correct = ak.get("correct")
+        return [f"Q{i}: {'True' if correct else 'False'}"]
+
+    if q_type == "fill_blank":
+        accepted = ak.get("accepted_answers", [])
+        return [f"Q{i}: {' / '.join(accepted)}"]
+
+    if q_type == "short_answer":
+        ref = ak.get("reference_answer", "")
+        return [f"Q{i}: {ref}"]
+
+    if q_type == "matching":
+        pairs = ak.get("pairs", [])
+        pair_strs = [f"{p[0]+1}→{OPTION_LETTERS[p[1]]}" for p in pairs if len(p) == 2]
+        return [f"Q{i}: {', '.join(pair_strs)}"]
+
+    if q_type == "ordering":
+        correct_order = ak.get("correct_order", [])
+        order_strs = [str(idx + 1) for idx in correct_order]
+        return [f"Q{i}: {', '.join(order_strs)}"]
+
+    if q_type == "numeric":
+        value = ak.get("value", "")
+        unit  = payload.get("unit") or ""
+        return [f"Q{i}: {value}{(' ' + unit) if unit else ''}"]
+
+    return [f"Q{i}: (see question)"]
+
+
+def _format_question_json(q, include_answers: bool) -> dict:
+    """
+    Return a structured dict for a question of any type.
+    Uses the canonical payload / answer_key JSON columns.
+    """
+    q_type  = getattr(q, "type", "mcq") or "mcq"
+    payload = _parse_json_field(q.payload)
+    ak      = _parse_json_field(q.answer_key)
+
+    # For MCQ, ensure payload always has options (with legacy fallback)
+    if q_type == "mcq" and "options" not in payload:
+        payload = {"options": q.options or []}
+
+    result = {
+        "type":        q_type,
+        "question":    q.question_text,
+        "payload":     payload,
+        "explanation": q.explanation or "",
+    }
+    if include_answers:
+        result["answer_key"] = ak
+    return result
+
+
 # ─── Export quiz ──────────────────────────────────────────────────────────────
 
 @router.get("/{quiz_id}/export")
@@ -452,7 +627,6 @@ def export_quiz(
         .all()
     )
 
-    option_letters = ["A", "B", "C", "D"]
     safe_title = quiz.title.replace("—", "-").replace(" ", "_")[:50]
 
     # ── JSON export ────────────────────────────────────────────────────────────
@@ -460,20 +634,7 @@ def export_quiz(
         data = {
             "title":      quiz.title,
             "difficulty": quiz.difficulty,
-            "questions": [
-                {
-                    "question": q.question_text,
-                    "options":  q.options,
-                    **(
-                        {
-                            "correct_option": q.correct_option,
-                            "correct_answer": q.options[q.correct_option] if q.options else "",
-                            "explanation":    q.explanation,
-                        } if include_answers else {}
-                    ),
-                }
-                for q in questions
-            ],
+            "questions":  [_format_question_json(q, include_answers) for q in questions],
         }
         content = json.dumps(data, indent=2, ensure_ascii=False)
         return Response(
@@ -490,22 +651,14 @@ def export_quiz(
     lines.append("")
 
     for i, q in enumerate(questions, 1):
-        lines.append(f"Q{i}. {q.question_text}")
-        for j, opt in enumerate(q.options):
-            lines.append(f"    {option_letters[j]}) {opt}")
-        if include_answers:
-            correct_letter = option_letters[q.correct_option]
-            lines.append(f"    ✔ Answer: {correct_letter}")
-            if q.explanation:
-                lines.append(f"    💬 {q.explanation}")
-        lines.append("")
+        lines.extend(_format_question_txt(i, q, include_answers))
 
     if not include_answers:
         lines.append("=" * 60)
         lines.append("Answer Key")
         lines.append("=" * 60)
         for i, q in enumerate(questions, 1):
-            lines.append(f"Q{i}: {option_letters[q.correct_option]}")
+            lines.extend(_format_answer_key_line(i, q))
 
     content = "\n".join(lines)
     return Response(
