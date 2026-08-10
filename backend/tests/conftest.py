@@ -1,4 +1,4 @@
-﻿"""
+"""
 Shared pytest fixtures for all backend tests.
 
 Provides:
@@ -11,15 +11,22 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.database import Base, get_db
 
-# Use an in-memory SQLite DB for tests (isolated, no disk file)
+# Use an in-memory SQLite DB for tests (isolated, no disk file).
+# StaticPool forces all connections to share ONE underlying connection,
+# which is essential for in-memory SQLite — without it each new connection
+# (including FastAPI's thread pool) sees an empty database.
 TEST_DB_URL = "sqlite:///:memory:"
 
-# check_same_thread=False required for SQLite with multiple test threads
-test_engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
+test_engine = create_engine(
+    TEST_DB_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,   # ← key fix: all threads share the same connection
+)
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
 
