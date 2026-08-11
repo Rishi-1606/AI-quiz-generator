@@ -1,4 +1,4 @@
-﻿"""
+"""
 Sprint 7 - Step 3: Unit tests for ai_service.py
 
 All Gemini API calls are mocked — no real API keys or network needed.
@@ -391,3 +391,126 @@ def test_generate_feedback_all_correct_no_api_call(mocker):
     assert "5" in result          # mentions total
     assert result != ""           # not empty
     mock_instance.models.generate_content.assert_not_called()
+
+
+# ===========================================================================
+# Sprint 8 — Gap 1: matching / ordering / numeric generation (new validators)
+# ===========================================================================
+
+def test_chunk_generates_valid_matching(mocker):
+    """Valid matching JSON is parsed; payload has left/right_items, answer_key has pairs."""
+    from app.services.ai_service import generate_questions_from_chunk
+
+    raw = json.dumps([{
+        "type": "matching",
+        "question": "Match each organelle with its function.",
+        "left_items":  ["Mitochondria", "Ribosome", "Nucleus"],
+        "right_items": ["ATP production", "Protein synthesis", "DNA storage"],
+        "pairs": [[0, 0], [1, 1], [2, 2]],
+        "explanation": "Each organelle has a distinct primary function.",
+    }])
+    _mock_client(mocker, raw)
+
+    result = generate_questions_from_chunk("Biology text.", num_questions=1, question_types=["matching"])
+
+    assert len(result) == 1
+    q = result[0]
+    assert q["type"] == "matching"
+    assert q["payload"]["left_items"] == ["Mitochondria", "Ribosome", "Nucleus"]
+    assert q["answer_key"]["pairs"] == [[0, 0], [1, 1], [2, 2]]
+
+
+def test_chunk_rejects_matching_with_mismatched_lengths(mocker):
+    """Matching question where left_items and right_items have different lengths is rejected."""
+    from app.services.ai_service import generate_questions_from_chunk
+
+    raw = json.dumps([{
+        "type": "matching",
+        "question": "Match these.",
+        "left_items":  ["A", "B"],
+        "right_items": ["X", "Y", "Z"],    # 3 items vs 2 — mismatch
+        "pairs": [[0, 0], [1, 1]],
+        "explanation": "Explanation.",
+    }])
+    _mock_client(mocker, raw)
+
+    result = generate_questions_from_chunk("Text.", num_questions=1, question_types=["matching"])
+    assert result == []
+
+
+def test_chunk_generates_valid_ordering(mocker):
+    """Valid ordering JSON is parsed; payload has items, answer_key has correct_order."""
+    from app.services.ai_service import generate_questions_from_chunk
+
+    raw = json.dumps([{
+        "type": "ordering",
+        "question": "Arrange the steps of mitosis in order.",
+        "items": ["Anaphase", "Prophase", "Telophase", "Metaphase"],
+        "correct_order": [1, 3, 0, 2],
+        "explanation": "Mitosis proceeds: Prophase → Metaphase → Anaphase → Telophase.",
+    }])
+    _mock_client(mocker, raw)
+
+    result = generate_questions_from_chunk("Biology.", num_questions=1, question_types=["ordering"])
+
+    assert len(result) == 1
+    q = result[0]
+    assert q["type"] == "ordering"
+    assert q["payload"]["items"] == ["Anaphase", "Prophase", "Telophase", "Metaphase"]
+    assert q["answer_key"]["correct_order"] == [1, 3, 0, 2]
+
+
+def test_chunk_rejects_ordering_with_invalid_permutation(mocker):
+    """Ordering where correct_order is not a valid permutation of indices is rejected."""
+    from app.services.ai_service import generate_questions_from_chunk
+
+    raw = json.dumps([{
+        "type": "ordering",
+        "question": "Order these.",
+        "items": ["A", "B", "C"],
+        "correct_order": [0, 1, 5],    # index 5 out of range — not a valid permutation
+        "explanation": "Explanation.",
+    }])
+    _mock_client(mocker, raw)
+
+    result = generate_questions_from_chunk("Text.", num_questions=1, question_types=["ordering"])
+    assert result == []
+
+
+def test_chunk_generates_valid_numeric(mocker):
+    """Valid numeric JSON is parsed; answer_key has value and tolerance as floats."""
+    from app.services.ai_service import generate_questions_from_chunk
+
+    raw = json.dumps([{
+        "type": "numeric",
+        "question": "What is the acceleration due to gravity on Earth in m/s²?",
+        "value": 9.8,
+        "tolerance": 0.1,
+        "explanation": "Standard gravitational acceleration is 9.8 m/s².",
+    }])
+    _mock_client(mocker, raw)
+
+    result = generate_questions_from_chunk("Physics.", num_questions=1, question_types=["numeric"])
+
+    assert len(result) == 1
+    q = result[0]
+    assert q["type"] == "numeric"
+    assert q["answer_key"]["value"] == 9.8
+    assert q["answer_key"]["tolerance"] == 0.1
+
+
+def test_chunk_rejects_numeric_with_string_value(mocker):
+    """Numeric question where value is a non-numeric string is rejected."""
+    from app.services.ai_service import generate_questions_from_chunk
+
+    raw = json.dumps([{
+        "type": "numeric",
+        "question": "What is the speed of light?",
+        "value": "fast",    # string, not a number
+        "tolerance": 0,
+        "explanation": "Explanation.",
+    }])
+    _mock_client(mocker, raw)
+
+    result = generate_questions_from_chunk("Text.", num_questions=1, question_types=["numeric"])
+    assert result == []

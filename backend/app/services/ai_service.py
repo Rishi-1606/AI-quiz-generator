@@ -107,6 +107,57 @@ JSON shape:
 }
 Rules: question must be answerable in 1-3 sentences. reference_answer is used by AI grader.
 """,
+
+    "matching": """
+TYPE: matching
+JSON shape:
+{
+  "type": "matching",
+  "question": "Match each item on the left with its correct pair on the right.",
+  "left_items": ["Term A", "Term B", "Term C"],
+  "right_items": ["Definition 1", "Definition 2", "Definition 3"],
+  "pairs": [[0, 0], [1, 1], [2, 2]],
+  "explanation": "Brief explanation of all correct pairs."
+}
+Rules:
+- left_items and right_items must have the same length (3-5 items each).
+- pairs is a list of [left_index, right_index] pairs, 0-indexed.
+- Every left index must appear exactly once in pairs.
+- Do NOT shuffle right_items — keep them in definition order and use pairs to encode the mapping.
+""",
+
+    "ordering": """
+TYPE: ordering
+JSON shape:
+{
+  "type": "ordering",
+  "question": "Arrange the following steps in the correct order.",
+  "items": ["Step B", "Step D", "Step A", "Step C"],
+  "correct_order": [2, 0, 3, 1],
+  "explanation": "Explain why this sequence is correct."
+}
+Rules:
+- items is the SHUFFLED list shown to the student (not in correct order).
+- correct_order is a list of indices into items that gives the correct sequence.
+- Example: if items=["B","D","A","C"] and correct order is A,B,C,D then correct_order=[2,0,3,1].
+- Use 3-5 items only.
+""",
+
+    "numeric": """
+TYPE: numeric
+JSON shape:
+{
+  "type": "numeric",
+  "question": "What is the value of X?",
+  "value": 9.8,
+  "tolerance": 0.1,
+  "explanation": "Brief explanation of the correct value."
+}
+Rules:
+- value must be a JSON number (int or float), NOT a string.
+- tolerance is the acceptable ± margin (absolute, not percentage). Use 0 for exact answers.
+- Do NOT include units in the value field — mention units only in the question text.
+""",
 }
 
 
@@ -247,6 +298,69 @@ def _validate_question(q: dict, allowed_types: list[str] | None = None) -> dict 
             "explanation":    q.get("explanation", ""),
             "payload":    {},
             "answer_key": {"reference_answer": q["reference_answer"]},
+        }
+
+    elif q_type == "matching":
+        if not all(k in q for k in ("question", "left_items", "right_items", "pairs", "explanation")):
+            return None
+        left  = q["left_items"]
+        right = q["right_items"]
+        pairs = q["pairs"]
+        # Basic sanity: same length, pairs is a list of 2-element lists
+        if not (isinstance(left, list) and isinstance(right, list) and isinstance(pairs, list)):
+            return None
+        if len(left) != len(right) or len(pairs) != len(left):
+            return None
+        if not all(isinstance(p, (list, tuple)) and len(p) == 2 for p in pairs):
+            return None
+        return {
+            "type":           "matching",
+            "question":       q["question"],
+            "options":        [],
+            "correct_option": 0,
+            "explanation":    q.get("explanation", ""),
+            "payload":    {"left_items": left, "right_items": right},
+            "answer_key": {"pairs": [list(p) for p in pairs]},
+        }
+
+    elif q_type == "ordering":
+        if not all(k in q for k in ("question", "items", "correct_order", "explanation")):
+            return None
+        items         = q["items"]
+        correct_order = q["correct_order"]
+        if not (isinstance(items, list) and isinstance(correct_order, list)):
+            return None
+        if len(items) < 2 or len(correct_order) != len(items):
+            return None
+        # correct_order must be a permutation of range(len(items))
+        if sorted(correct_order) != list(range(len(items))):
+            return None
+        return {
+            "type":           "ordering",
+            "question":       q["question"],
+            "options":        [],
+            "correct_option": 0,
+            "explanation":    q.get("explanation", ""),
+            "payload":    {"items": items},
+            "answer_key": {"correct_order": [int(i) for i in correct_order]},
+        }
+
+    elif q_type == "numeric":
+        if not all(k in q for k in ("question", "value", "explanation")):
+            return None
+        try:
+            value     = float(q["value"])
+            tolerance = float(q.get("tolerance") or 0)
+        except (ValueError, TypeError):
+            return None
+        return {
+            "type":           "numeric",
+            "question":       q["question"],
+            "options":        [],
+            "correct_option": 0,
+            "explanation":    q.get("explanation", ""),
+            "payload":    {},
+            "answer_key": {"value": value, "tolerance": tolerance},
         }
 
     return None  # unknown type
