@@ -5,6 +5,7 @@ const Input = forwardRef(function Input(
     label,
     error,
     icon: Icon,
+    id,
     className = '',
     ...props
   },
@@ -13,7 +14,7 @@ const Input = forwardRef(function Input(
   return (
     <div className="space-y-1.5">
       {label && (
-        <label className="block text-sm font-medium text-dark-300">
+        <label htmlFor={id} className="block text-sm font-medium text-dark-300">
           {label}
         </label>
       )}
@@ -24,6 +25,7 @@ const Input = forwardRef(function Input(
           </div>
         )}
         <input
+          id={id}
           ref={ref}
           className={`
             w-full rounded-xl border bg-dark-800/50 backdrop-blur-sm

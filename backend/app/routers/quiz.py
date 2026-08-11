@@ -653,3 +653,63 @@ def export_quiz(
         media_type="text/plain; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{safe_title}.txt"'},
     )
+
+
+# ─── E2E test seed (TEST_MODE=1 only) ─────────────────────────────────────────
+
+@router.post("/seed-test-quiz", status_code=201, response_model=QuizResponse)
+def seed_test_quiz(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Creates a quiz with 2 hardcoded MCQ questions — NO Gemini call.
+    Only available when the environment variable TEST_MODE=1.
+    Used exclusively by Playwright E2E tests.
+    """
+    import os
+    if os.getenv("TEST_MODE") != "1":
+        raise HTTPException(status_code=404, detail="Not found.")
+
+    quiz = Quiz(
+        user_id=current_user.id,
+        title="E2E Test Quiz",
+        difficulty="easy",
+        time_limit=300,
+        total_questions=2,
+    )
+    db.add(quiz)
+    db.flush()
+
+    hardcoded_questions = [
+        {
+            "question": "What is 2 + 2?",
+            "type": "mcq",
+            "payload": {"options": ["1", "2", "3", "4"]},
+            "answer_key": {"correct_index": 3},   # "4" is correct
+            "explanation": "2 + 2 equals 4.",
+        },
+        {
+            "question": "What is the capital of France?",
+            "type": "mcq",
+            "payload": {"options": ["Berlin", "Madrid", "Paris", "Rome"]},
+            "answer_key": {"correct_index": 2},   # "Paris" is correct
+            "explanation": "Paris is the capital of France.",
+        },
+    ]
+
+    for i, q in enumerate(hardcoded_questions):
+        db.add(Question(
+            quiz_id=quiz.id,
+            question_text=q["question"],
+            type=q["type"],
+            payload=q["payload"],
+            answer_key=q["answer_key"],
+            explanation=q["explanation"],
+            points=1,
+            order_index=i,
+        ))
+
+    db.commit()
+    db.refresh(quiz)
+    return quiz

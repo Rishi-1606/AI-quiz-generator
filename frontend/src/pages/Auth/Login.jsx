@@ -106,6 +106,7 @@ export default function Login() {
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <Input
+                id="login-email"
                 label="Email"
                 type="email"
                 placeholder="you@example.com"
@@ -115,6 +116,7 @@ export default function Login() {
                 required
               />
               <Input
+                id="login-password"
                 label="Password"
                 type="password"
                 placeholder="••••••••"
