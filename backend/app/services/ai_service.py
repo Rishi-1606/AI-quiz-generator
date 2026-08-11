@@ -241,14 +241,11 @@ def _validate_question(q: dict, allowed_types: list[str] | None = None) -> dict 
         if not isinstance(q["options"], list) or len(q["options"]) != 4:
             return None
         return {
-            "type":           "mcq",
-            "question":       q["question"],
-            "options":        q["options"],
-            "correct_option": int(q["correct_option"]),
-            "explanation":    q.get("explanation", ""),
-            # New generalized fields
-            "payload":    {"options": q["options"]},
-            "answer_key": {"correct_index": int(q["correct_option"])},
+            "type":        "mcq",
+            "question":    q["question"],
+            "explanation": q.get("explanation", ""),
+            "payload":     {"options": q["options"]},
+            "answer_key":  {"correct_index": int(q["correct_option"])},
         }
 
     elif q_type == "true_false":
@@ -262,13 +259,11 @@ def _validate_question(q: dict, allowed_types: list[str] | None = None) -> dict 
             else:
                 return None
         return {
-            "type":           "true_false",
-            "question":       q["question"],
-            "options":        ["True", "False"],          # for legacy compat display
-            "correct_option": 0 if correct else 1,        # legacy compat
-            "explanation":    q.get("explanation", ""),
-            "payload":    {},
-            "answer_key": {"correct": correct},
+            "type":        "true_false",
+            "question":    q["question"],
+            "explanation": q.get("explanation", ""),
+            "payload":     {},
+            "answer_key":  {"correct": correct},
         }
 
     elif q_type == "fill_blank":
@@ -278,26 +273,22 @@ def _validate_question(q: dict, allowed_types: list[str] | None = None) -> dict 
         if isinstance(answers, str):
             answers = [answers]
         return {
-            "type":           "fill_blank",
-            "question":       q["question"],
-            "options":        [],                          # no options for this type
-            "correct_option": 0,                          # placeholder
-            "explanation":    q.get("explanation", ""),
-            "payload":    {"text_with_blanks": q.get("text_with_blanks", q["question"])},
-            "answer_key": {"accepted_answers": answers},
+            "type":        "fill_blank",
+            "question":    q["question"],
+            "explanation": q.get("explanation", ""),
+            "payload":     {"text_with_blanks": q.get("text_with_blanks", q["question"])},
+            "answer_key":  {"accepted_answers": answers},
         }
 
     elif q_type == "short_answer":
         if not all(k in q for k in ("question", "reference_answer", "explanation")):
             return None
         return {
-            "type":           "short_answer",
-            "question":       q["question"],
-            "options":        [],
-            "correct_option": 0,
-            "explanation":    q.get("explanation", ""),
-            "payload":    {},
-            "answer_key": {"reference_answer": q["reference_answer"]},
+            "type":        "short_answer",
+            "question":    q["question"],
+            "explanation": q.get("explanation", ""),
+            "payload":     {},
+            "answer_key":  {"reference_answer": q["reference_answer"]},
         }
 
     elif q_type == "matching":
@@ -314,13 +305,11 @@ def _validate_question(q: dict, allowed_types: list[str] | None = None) -> dict 
         if not all(isinstance(p, (list, tuple)) and len(p) == 2 for p in pairs):
             return None
         return {
-            "type":           "matching",
-            "question":       q["question"],
-            "options":        [],
-            "correct_option": 0,
-            "explanation":    q.get("explanation", ""),
-            "payload":    {"left_items": left, "right_items": right},
-            "answer_key": {"pairs": [list(p) for p in pairs]},
+            "type":        "matching",
+            "question":    q["question"],
+            "explanation": q.get("explanation", ""),
+            "payload":     {"left_items": left, "right_items": right},
+            "answer_key":  {"pairs": [list(p) for p in pairs]},
         }
 
     elif q_type == "ordering":
@@ -336,13 +325,11 @@ def _validate_question(q: dict, allowed_types: list[str] | None = None) -> dict 
         if sorted(correct_order) != list(range(len(items))):
             return None
         return {
-            "type":           "ordering",
-            "question":       q["question"],
-            "options":        [],
-            "correct_option": 0,
-            "explanation":    q.get("explanation", ""),
-            "payload":    {"items": items},
-            "answer_key": {"correct_order": [int(i) for i in correct_order]},
+            "type":        "ordering",
+            "question":    q["question"],
+            "explanation": q.get("explanation", ""),
+            "payload":     {"items": items},
+            "answer_key":  {"correct_order": [int(i) for i in correct_order]},
         }
 
     elif q_type == "numeric":
@@ -354,13 +341,11 @@ def _validate_question(q: dict, allowed_types: list[str] | None = None) -> dict 
         except (ValueError, TypeError):
             return None
         return {
-            "type":           "numeric",
-            "question":       q["question"],
-            "options":        [],
-            "correct_option": 0,
-            "explanation":    q.get("explanation", ""),
-            "payload":    {},
-            "answer_key": {"value": value, "tolerance": tolerance},
+            "type":        "numeric",
+            "question":    q["question"],
+            "explanation": q.get("explanation", ""),
+            "payload":     {},
+            "answer_key":  {"value": value, "tolerance": tolerance},
         }
 
     return None  # unknown type
@@ -483,7 +468,12 @@ def generate_feedback(
 
     mistake_lines = []
     for i, q in enumerate(wrong_questions[:5], 1):
-        correct_text = q["options"][q["correct_option"]] if q.get("options") else "—"
+        # wrong_questions now carries answer_key.correct_index + payload.options
+        ak           = q.get("answer_key") or {}
+        payload      = q.get("payload") or {}
+        opts         = payload.get("options", [])
+        correct_idx  = ak.get("correct_index")
+        correct_text = opts[correct_idx] if (opts and correct_idx is not None and correct_idx < len(opts)) else "—"
         mistake_lines.append(
             f"{i}. Q: {q['question_text']}\n"
             f"   Correct answer: {correct_text}\n"

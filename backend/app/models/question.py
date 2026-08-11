@@ -19,12 +19,6 @@ class Question(Base):
     points     = Column(Integer, nullable=False, default=1)
     media_url  = Column(Text, nullable=True)
 
-    # ── DEPRECATED columns (kept for backward compat — drop in Sprint 12) ─────
-    # These are still written via dual-write in Sprint 1.
-    # Do NOT add new code that reads these directly; use payload/answer_key instead.
-    options        = Column(JSON, nullable=True)    # DEPRECATED: use payload["options"]
-    correct_option = Column(Integer, nullable=True) # DEPRECATED: use answer_key["correct_index"]
-
     explanation = Column(Text, nullable=True)
     order_index = Column(Integer, nullable=False, default=0)
 

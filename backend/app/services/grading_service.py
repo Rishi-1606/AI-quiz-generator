@@ -56,18 +56,13 @@ def grade_question(question, user_answer: Any) -> GradeResult:
 def _grade_mcq(question, user_answer: Optional[int]) -> GradeResult:
     """
     user_answer: 0-indexed int matching chosen option.
-    Correct index comes from answer_key["correct_index"] (new)
-    with fallback to correct_option (legacy).
+    Correct index comes from answer_key["correct_index"].
     """
     if user_answer is None:
         return GradeResult(correct=False, points_earned=0)
 
-    # Prefer new answer_key column; fall back to legacy correct_option
-    answer_key = _parse_json(question.answer_key)
-    if answer_key and "correct_index" in answer_key:
-        correct_index = answer_key["correct_index"]
-    else:
-        correct_index = question.correct_option  # legacy fallback
+    answer_key    = _parse_json(question.answer_key)
+    correct_index = (answer_key or {}).get("correct_index", 0)
 
     correct = (user_answer == correct_index)
     return GradeResult(correct=correct, points_earned=question.points if correct else 0)

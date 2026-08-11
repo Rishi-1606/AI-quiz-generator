@@ -1,4 +1,4 @@
-﻿"""
+"""
 Sprint 7 - Step 2: Unit tests for grading_service.py
 
 Tests grade_question() for all 7 question types:
@@ -53,16 +53,20 @@ def test_mcq_none_answer_skipped():
     assert result.correct is False
     assert result.points_earned == 0
 
-def test_mcq_legacy_fallback_no_answer_key():
-    """When answer_key has no correct_index, fall back to correct_option."""
-    q = MockQuestion("mcq", {}, correct_option=1, points=1)
-    result = grade_question(q, user_answer=1)
-    assert result.correct is True
+def test_mcq_no_answer_key_defaults_to_index_0():
+    """
+    When answer_key has no correct_index (e.g. None or empty dict),
+    grader defaults to correct_index=0.
+    This replaces the old legacy correct_option fallback (column removed in Sprint 8).
+    """
+    q = MockQuestion("mcq", {}, points=1)
+    # answering index 0 should be correct when there's no answer_key.correct_index
+    assert grade_question(q, user_answer=0).correct is True
 
-def test_mcq_legacy_fallback_wrong():
-    q = MockQuestion("mcq", {}, correct_option=1, points=1)
-    result = grade_question(q, user_answer=3)
-    assert result.correct is False
+def test_mcq_no_answer_key_wrong_answer():
+    """When defaulting to correct_index=0, any other answer is wrong."""
+    q = MockQuestion("mcq", {}, points=1)
+    assert grade_question(q, user_answer=3).correct is False
 
 
 # ===========================================================================

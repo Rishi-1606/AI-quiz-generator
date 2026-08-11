@@ -39,7 +39,7 @@ function getQuestionStatus(q, userAnswer) {
   const ak   = tryParseJson(q.answer_key);
 
   if (type === 'mcq') {
-    return userAnswer === q.correct_option ? 'correct' : 'wrong';
+    return userAnswer === (ak?.correct_index ?? 0) ? 'correct' : 'wrong';
   }
   if (type === 'true_false') {
     return userAnswer === ak?.correct ? 'correct' : 'wrong';
@@ -60,12 +60,12 @@ function AnswerDisplay({ q, userAnswer }) {
 
   // ── MCQ ──
   if (type === 'mcq') {
-    const opts = payload?.options ?? q.options ?? [];
+    const opts = payload?.options ?? [];
     return (
       <div className="space-y-2 ml-8">
         {opts.map((option, oi) => {
           const isUserPick   = userAnswer === oi;
-          const isCorrectOpt = (ak?.correct_index ?? q.correct_option) === oi;
+          const isCorrectOpt = (ak?.correct_index ?? 0) === oi;
           let optClass = 'border-dark-700 bg-dark-800/50 text-dark-400';
           if (isCorrectOpt)                 optClass = 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300';
           if (isUserPick && !isCorrectOpt)  optClass = 'border-red-500/50 bg-red-500/10 text-red-300';

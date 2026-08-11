@@ -140,15 +140,11 @@ def generate_quiz(
     db.add(new_quiz)
     db.flush()  # flush to get new_quiz.id before adding questions
 
-    # Save Questions — dual-write: old columns + new generalized columns
+    # Save Questions
     for index, q in enumerate(ai_questions):
         question = Question(
             quiz_id=new_quiz.id,
             question_text=q["question"],
-            # ── DEPRECATED (kept for backward compat until Sprint 12) ──
-            options=q.get("options", []),
-            correct_option=q.get("correct_option", 0),
-            # ── New generalized fields (Sprint 1) ─────────────────────
             type=q.get("type", "mcq"),
             payload=q.get("payload", {}),
             answer_key=q.get("answer_key", {}),
@@ -204,15 +200,11 @@ def generate_quiz_from_topic(
     db.add(new_quiz)
     db.flush()
 
-    # Save Questions — dual-write: old columns + new generalized columns
+    # Save Questions
     for index, q in enumerate(ai_questions):
         db.add(Question(
             quiz_id=new_quiz.id,
             question_text=q["question"],
-            # ── DEPRECATED (kept for backward compat until Sprint 12) ──
-            options=q.get("options", []),
-            correct_option=q.get("correct_option", 0),
-            # ── New generalized fields (Sprint 1) ─────────────────────
             type=q.get("type", "mcq"),
             payload=q.get("payload", {}),
             answer_key=q.get("answer_key", {}),
@@ -337,19 +329,14 @@ def submit_quiz(
     for question in questions:
         q_id_str    = str(question.id)
         user_answer = body.answers.get(q_id_str)
-        # Only MCQ questions feed into the AI feedback generator (for now)
-        if question.type == "mcq" and user_answer is not None:
+        if user_answer is not None:
             result = grade_question(question, user_answer)
             if not result.correct:
-                # Build feedback payload using new answer_key with legacy fallback
-                import json as _json
-                ak = question.answer_key if isinstance(question.answer_key, dict) else (_json.loads(question.answer_key) if question.answer_key else {})
-                correct_idx = ak.get("correct_index", question.correct_option)
                 wrong_q_data.append({
-                    "question_text":  question.question_text,
-                    "options":        question.options or [],
-                    "correct_option": correct_idx,
-                    "explanation":    question.explanation or "",
+                    "question_text": question.question_text,
+                    "answer_key":    question.answer_key,
+                    "payload":       question.payload,
+                    "explanation":   question.explanation or "",
                 })
 
     ai_feedback = generate_feedback(
@@ -452,11 +439,11 @@ def _format_question_txt(i: int, q, include_answers: bool) -> list:
     lines.append(f"Q{i}. [{q_type.upper()}] {q.question_text}")
 
     if q_type == "mcq":
-        opts = payload.get("options") or q.options or []
+        opts = payload.get("options") or []
         for j, opt in enumerate(opts):
             lines.append(f"    {OPTION_LETTERS[j]}) {opt}")
         if include_answers:
-            idx = ak.get("correct_index", q.correct_option or 0)
+            idx = ak.get("correct_index", 0)
             lines.append(f"    ✔ Answer: {OPTION_LETTERS[idx]}")
             if q.explanation:
                 lines.append(f"    💬 {q.explanation}")
@@ -540,7 +527,7 @@ def _format_answer_key_line(i: int, q) -> list:
     ak      = _parse_json_field(q.answer_key)
 
     if q_type == "mcq":
-        idx = ak.get("correct_index", q.correct_option or 0)
+        idx = ak.get("correct_index", 0)
         return [f"Q{i}: {OPTION_LETTERS[idx]}"]
 
     if q_type == "true_false":
