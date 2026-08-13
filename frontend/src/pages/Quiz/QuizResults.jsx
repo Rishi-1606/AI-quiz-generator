@@ -23,20 +23,32 @@ function getScoreLabel(pct) {
   return           { label: 'Keep Practicing 💪',   color: 'text-orange-400'  };
 }
 
-const OPTION_LETTERS = ['A', 'B', 'C', 'D'];
-
-// ─── Type-aware helpers ───────────────────────────────────────────────────────
-
 function tryParseJson(val) {
   if (!val) return null;
   if (typeof val === 'object') return val;
   try { return JSON.parse(val); } catch { return null; }
 }
 
-function getQuestionStatus(q, userAnswer) {
-  if (userAnswer === undefined || userAnswer === null) return 'skipped';
+/**
+ * Returns 'correct' | 'wrong' | 'skipped' for each question.
+ * matching / ordering / numeric are graded server-side; we get the result
+ * from attempt.question_results if available, otherwise mark as 'submitted'.
+ */
+function getQuestionStatus(q, userAnswer, questionResults) {
   const type = q.type ?? 'mcq';
-  const ak   = tryParseJson(q.answer_key);
+
+  // If server returned per-question results (attempt.question_results), use them
+  if (questionResults) {
+    const res = questionResults[String(q.id)];
+    if (res !== undefined) {
+      if (userAnswer === undefined || userAnswer === null) return 'skipped';
+      return res ? 'correct' : 'wrong';
+    }
+  }
+
+  if (userAnswer === undefined || userAnswer === null) return 'skipped';
+
+  const ak = tryParseJson(q.answer_key);
 
   if (type === 'mcq') {
     return userAnswer === (ak?.correct_index ?? 0) ? 'correct' : 'wrong';
@@ -50,107 +62,8 @@ function getQuestionStatus(q, userAnswer) {
     return accepted.some(a => norm(a) === norm(userAnswer)) ? 'correct' : 'wrong';
   }
   if (type === 'short_answer') return 'ai_graded';
-  return 'submitted';   // ordering / matching
-}
-
-function AnswerDisplay({ q, userAnswer }) {
-  const type = q.type ?? 'mcq';
-  const ak   = tryParseJson(q.answer_key);
-  const payload = tryParseJson(q.payload);
-
-  // ── MCQ ──
-  if (type === 'mcq') {
-    const opts = payload?.options ?? [];
-    return (
-      <div className="space-y-2 ml-8">
-        {opts.map((option, oi) => {
-          const isUserPick   = userAnswer === oi;
-          const isCorrectOpt = (ak?.correct_index ?? 0) === oi;
-          let optClass = 'border-dark-700 bg-dark-800/50 text-dark-400';
-          if (isCorrectOpt)                 optClass = 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300';
-          if (isUserPick && !isCorrectOpt)  optClass = 'border-red-500/50 bg-red-500/10 text-red-300';
-          return (
-            <div key={oi} className={`flex items-center gap-3 px-3 py-2 rounded-xl border text-sm ${optClass}`}>
-              <span className="font-bold text-xs w-5 text-center">{OPTION_LETTERS[oi]}</span>
-              <span className="flex-1">{option}</span>
-              {isCorrectOpt && <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
-              {isUserPick && !isCorrectOpt && <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />}
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
-  // ── True / False ──
-  if (type === 'true_false') {
-    const correct = ak?.correct;
-    return (
-      <div className="flex gap-3 ml-8">
-        {[true, false].map(val => {
-          const label = val ? 'True' : 'False';
-          const isCorrect = val === correct;
-          const isUser    = userAnswer === val;
-          let cls = 'border-dark-700 bg-dark-800/50 text-dark-400';
-          if (isCorrect)             cls = 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300';
-          if (isUser && !isCorrect)  cls = 'border-red-500/50 bg-red-500/10 text-red-300';
-          return (
-            <div key={label} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-semibold ${cls}`}>
-              {isCorrect && <CheckCircle2 className="w-4 h-4" />}
-              {isUser && !isCorrect && <XCircle className="w-4 h-4" />}
-              {label}
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
-  // ── Fill in the Blank ──
-  if (type === 'fill_blank') {
-    const accepted = ak?.accepted_answers ?? [];
-    const isRight  = accepted.some(a => String(a).trim().toLowerCase() === String(userAnswer ?? '').trim().toLowerCase());
-    return (
-      <div className="ml-8 space-y-2">
-        <div className={`px-3 py-2 rounded-xl border text-sm ${isRight ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300' : 'border-red-500/50 bg-red-500/10 text-red-300'}`}>
-          <span className="font-semibold">Your answer: </span>{userAnswer ?? '—'}
-        </div>
-        {!isRight && accepted.length > 0 && (
-          <div className="px-3 py-2 rounded-xl border border-emerald-500/40 bg-emerald-500/8 text-emerald-300 text-sm">
-            <span className="font-semibold">Accepted: </span>{accepted.join(' / ')}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ── Short Answer (AI-graded) ──
-  if (type === 'short_answer') {
-    const reference = ak?.reference_answer ?? '';
-    return (
-      <div className="ml-8 space-y-2">
-        <div className="px-3 py-2.5 rounded-xl border border-primary-500/30 bg-primary-500/8 text-dark-200 text-sm">
-          <div className="flex items-center gap-2 mb-1">
-            <Brain className="w-3.5 h-3.5 text-primary-400" />
-            <span className="text-primary-400 text-xs font-semibold">AI Graded</span>
-          </div>
-          <span className="font-semibold text-dark-400">Your answer: </span>{userAnswer ?? '—'}
-        </div>
-        {reference && (
-          <div className="px-3 py-2 rounded-xl border border-dark-600 bg-dark-800/60 text-dark-300 text-sm">
-            <span className="font-semibold text-dark-400">Reference answer: </span>{reference}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ── Ordering / Matching (submitted — no frontend correctness check) ──
-  return (
-    <div className="ml-8 px-3 py-2 rounded-xl border border-dark-600 bg-dark-800/50 text-dark-400 text-sm">
-      Answer submitted.
-    </div>
-  );
+  // matching / ordering / numeric — no client-side check; mark as submitted
+  return 'submitted';
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -160,21 +73,19 @@ export default function QuizResults() {
   const location    = useLocation();
   const navigate    = useNavigate();
 
-  // Results can come via navigation state (immediate) or fetched fresh
   const [attempt, setAttempt] = useState(location.state?.attempt ?? null);
-  const [quiz,    setQuiz]    = useState(null); // Always fetch fresh to get answer_keys!
+  const [quiz,    setQuiz]    = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error,     setError]     = useState('');
   const [showExport, setShowExport] = useState(false);
   const exportRef = useRef(null);
 
   useEffect(() => {
-    if (attempt && quiz) return; // Wait until quiz is fetched
+    if (attempt && quiz) return;
     const fetchData = async () => {
       try {
         const quizRes = await api.get(`/api/quizzes/${quizId}/with-answers`);
         setQuiz(quizRes.data);
-        // Attempt must have been passed via state; if not, show error
         if (!attempt) {
           setError('No attempt data found. Please take the quiz first.');
         }
@@ -211,13 +122,13 @@ export default function QuizResults() {
 
   const { label: scoreLabel, color: scoreColor } = getScoreLabel(attempt.percentage);
   const answers = attempt.answers ?? {};
+  // Some backends return per-question correctness in attempt.question_results
+  const questionResults = attempt.question_results ?? null;
 
   const handleExport = (format, includeAnswers) => {
     const token = localStorage.getItem('token');
     const url = `http://localhost:8000/api/quizzes/${quizId}/export?format=${format}&include_answers=${includeAnswers}`;
     const a = document.createElement('a');
-    a.href = url;
-    // Trigger with auth header by fetching as blob
     fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.blob())
       .then(blob => {
@@ -283,7 +194,6 @@ export default function QuizResults() {
 
         {/* ── Scorecard Banner ── */}
         <div className="bg-dark-900 border border-dark-800 rounded-3xl p-8 text-center shadow-xl">
-          {/* Score ring */}
           <div className="inline-flex items-center justify-center w-28 h-28 rounded-full bg-dark-800 border-4 border-primary-500/40 mb-5">
             <span className="text-4xl font-black text-white">{Math.round(attempt.percentage)}<span className="text-lg text-dark-400">%</span></span>
           </div>
@@ -335,50 +245,71 @@ export default function QuizResults() {
             Question Breakdown
           </h2>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             {quiz?.questions?.map((q, idx) => {
               const userAnswer = answers[String(q.id)];
-              const status     = getQuestionStatus(q, userAnswer);
-              const isSkipped  = status === 'skipped';
-              const isCorrect  = status === 'correct';
-              const isAiGraded = status === 'ai_graded';
-              const isSubmitted = status === 'submitted';
+              const status     = getQuestionStatus(q, userAnswer, questionResults);
 
-              let statusColor = 'border-yellow-500/30 bg-yellow-500/5';
-              let statusIcon  = <MinusCircle className="w-5 h-5 text-yellow-400 flex-shrink-0" />;
-              if (isCorrect)                                { statusColor = 'border-emerald-500/30 bg-emerald-500/5'; statusIcon = <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />; }
-              if (!isSkipped && !isCorrect && !isAiGraded && !isSubmitted) { statusColor = 'border-red-500/30 bg-red-500/5';     statusIcon = <XCircle      className="w-5 h-5 text-red-400     flex-shrink-0" />; }
-              if (isAiGraded)                               { statusColor = 'border-primary-500/30 bg-primary-500/5'; statusIcon = <Brain        className="w-5 h-5 text-primary-400  flex-shrink-0" />; }
+              // ── Colour / icon per status ──────────────────────────────────
+              let borderColor, bgColor, iconEl, labelText, labelColor;
+
+              if (status === 'correct') {
+                borderColor = 'border-emerald-500/40';
+                bgColor     = 'bg-emerald-500/5';
+                iconEl      = <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />;
+                labelText   = 'Correct';
+                labelColor  = 'text-emerald-400';
+              } else if (status === 'wrong') {
+                borderColor = 'border-red-500/40';
+                bgColor     = 'bg-red-500/5';
+                iconEl      = <XCircle className="w-5 h-5 text-red-400 flex-shrink-0" />;
+                labelText   = 'Wrong';
+                labelColor  = 'text-red-400';
+              } else if (status === 'ai_graded') {
+                // Short-answer: server scores it; we can't know result here, flag as AI graded
+                borderColor = 'border-primary-500/30';
+                bgColor     = 'bg-primary-500/5';
+                iconEl      = <Brain className="w-5 h-5 text-primary-400 flex-shrink-0" />;
+                labelText   = 'AI Graded';
+                labelColor  = 'text-primary-400';
+              } else if (status === 'submitted') {
+                // matching / ordering / numeric — server graded, no client result
+                borderColor = 'border-dark-600';
+                bgColor     = 'bg-dark-800/30';
+                iconEl      = <CheckCircle2 className="w-5 h-5 text-dark-500 flex-shrink-0" />;
+                labelText   = 'Submitted';
+                labelColor  = 'text-dark-500';
+              } else {
+                // skipped
+                borderColor = 'border-yellow-500/30';
+                bgColor     = 'bg-yellow-500/5';
+                iconEl      = <MinusCircle className="w-5 h-5 text-yellow-400 flex-shrink-0" />;
+                labelText   = 'Not answered';
+                labelColor  = 'text-yellow-400';
+              }
 
               return (
-                <div key={q.id} className={`border rounded-2xl p-5 ${statusColor}`}>
-                  {/* Type badge + question text */}
-                  <div className="flex items-start gap-3 mb-4">
-                    {statusIcon}
-                    <div className="flex-1">
-                      {q.type && q.type !== 'mcq' && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-dark-700 text-dark-400 font-medium mb-1 inline-block capitalize">
-                          {q.type.replace('_', ' ')}
-                        </span>
-                      )}
-                      <p className="text-dark-100 text-sm font-medium leading-relaxed">
-                        <span className="text-dark-400 mr-2">Q{idx + 1}.</span>{q.question_text}
-                      </p>
-                    </div>
+                <div key={q.id} className={`flex items-center gap-4 px-5 py-4 border rounded-2xl ${borderColor} ${bgColor}`}>
+                  {/* Status icon */}
+                  {iconEl}
+
+                  {/* Question number + text */}
+                  <div className="flex-1 min-w-0">
+                    {q.type && q.type !== 'mcq' && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-dark-700 text-dark-400 font-medium mb-1 inline-block capitalize">
+                        {q.type.replace(/_/g, ' ')}
+                      </span>
+                    )}
+                    <p className="text-dark-100 text-sm leading-snug">
+                      <span className="text-dark-500 mr-2">Q{idx + 1}.</span>
+                      {q.question_text}
+                    </p>
                   </div>
 
-                  {/* Type-aware answer display */}
-                  <AnswerDisplay q={q} userAnswer={userAnswer} />
-
-                  {/* Explanation */}
-                  {q.explanation && (
-                    <div className="ml-8 mt-3 px-3 py-2 rounded-xl bg-dark-800/60 border border-dark-700">
-                      <p className="text-dark-400 text-xs leading-relaxed">
-                        <span className="text-primary-400 font-semibold">Explanation: </span>
-                        {q.explanation}
-                      </p>
-                    </div>
-                  )}
+                  {/* Status label pill */}
+                  <span className={`text-xs font-semibold flex-shrink-0 ${labelColor}`}>
+                    {labelText}
+                  </span>
                 </div>
               );
             })}

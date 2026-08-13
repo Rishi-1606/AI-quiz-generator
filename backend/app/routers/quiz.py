@@ -306,6 +306,7 @@ def submit_quiz(
     skipped_count  = 0
     points_earned  = 0
     points_total   = sum(q.points for q in questions)
+    question_results: dict[str, bool | None] = {}  # {question_id_str: True/False/None}
 
     for question in questions:
         q_id_str    = str(question.id)
@@ -313,8 +314,10 @@ def submit_quiz(
 
         if user_answer is None:
             skipped_count += 1
+            question_results[q_id_str] = None   # skipped
         else:
             result = grade_question(question, user_answer)
+            question_results[q_id_str] = result.correct
             if result.correct:
                 correct_count += 1
                 points_earned += result.points_earned
@@ -359,10 +362,15 @@ def submit_quiz(
         answers=body.answers,
         time_taken=body.time_taken,
         ai_feedback=ai_feedback,
+        question_results=question_results,
     )
     db.add(attempt)
     db.commit()
     db.refresh(attempt)
+
+    # Attach computed fields not stored as DB columns
+    attempt.points_earned = points_earned
+    attempt.points_total  = points_total
 
     return attempt
 

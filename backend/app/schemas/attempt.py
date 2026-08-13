@@ -39,6 +39,8 @@ class AttemptResponse(BaseModel):
     # Sprint 2: points-based scoring
     points_earned: Optional[int] = None
     points_total:  Optional[int] = None
+    # Per-question grading: {"question_id": true|false}  (missing key = skipped)
+    question_results: Optional[Dict[str, Optional[bool]]] = None
 
     class Config:
         from_attributes = True

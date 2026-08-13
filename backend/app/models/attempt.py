@@ -22,6 +22,9 @@ class Attempt(Base):
     # User's selected answers: {question_id: selected_option_index or null if skipped}
     answers         = Column(JSON, nullable=True)
 
+    # Per-question grading results: {question_id: true/false}  (null = skipped)
+    question_results = Column(JSON, nullable=True)
+
     # AI-generated personalized study feedback
     ai_feedback     = Column(Text, nullable=True)
 
