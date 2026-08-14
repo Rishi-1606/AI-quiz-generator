@@ -3,5 +3,6 @@ from app.models.upload import Upload
 from app.models.quiz import Quiz
 from app.models.question import Question
 from app.models.attempt import Attempt
+from app.models.generation_job import GenerationJob
 
-__all__ = ["User", "Upload", "Quiz", "Question", "Attempt"]
+__all__ = ["User", "Upload", "Quiz", "Question", "Attempt", "GenerationJob"]
