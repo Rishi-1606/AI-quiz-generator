@@ -102,3 +102,21 @@ def auth_headers_b(client):
     assert resp.status_code == 201, f"Signup B failed: {resp.text}"
     token = resp.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limits():
+    """
+    Reset the in-memory rate limit storage before every test.
+
+    slowapi's MemoryStorage accumulates counts across tests because it is a
+    module-level singleton. Without this reset, a test that exhausts a user's
+    bucket (e.g. the rate-limit test) bleeds into subsequent tests that use the
+    same user_id key — causing spurious 429s.
+    """
+    from app.limiter import limiter
+    try:
+        limiter._storage.reset()
+    except AttributeError:
+        pass  # Safety: if storage doesn't support reset, tests may still pass
+    yield
