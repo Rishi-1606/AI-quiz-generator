@@ -1,9 +1,13 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.database import engine, Base
-from app.models import User, Upload, Quiz, Question, Attempt  # noqa: F401 — ensure models are registered
+from app.limiter import limiter
+from app.models import User, Upload, Quiz, Question, Attempt, GenerationJob  # noqa: F401 — ensure models are registered
 from app.routers import auth, upload, quiz, analytics, flashcards, profile
 
 
@@ -18,6 +22,11 @@ app = FastAPI(
     title="AI Quiz Generator API",
     lifespan=lifespan,
 )
+
+# Rate-limit state + middleware
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS middleware — allow Vite dev server (support port fallback)
 app.add_middleware(

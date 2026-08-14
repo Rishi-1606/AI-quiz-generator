@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from typing import List
@@ -11,6 +11,7 @@ from app.models.upload import Upload
 from app.models.quiz import Quiz
 from app.models.question import Question
 from app.models.attempt import Attempt
+from app.models.generation_job import GenerationJob
 from app.schemas.quiz import (
     QuizResponse, 
     QuizSummaryResponse,
@@ -21,6 +22,8 @@ from app.middleware.auth import get_current_user
 from app.services.text_processor import process_text
 from app.services.ai_service import generate_questions_from_chunk, generate_feedback, generate_questions_from_topic
 from app.services.grading_service import grade_question
+from app.services.job_service import run_quiz_from_doc_job, run_quiz_from_topic_job
+from app.limiter import limiter
 
 router = APIRouter(prefix="/api/quizzes", tags=["Quizzes"])
 
@@ -42,21 +45,20 @@ class GenerateTopicQuizRequest(BaseModel):
 
 # ─── Generate quiz ───────────────────────────────────────────────────────────
 
-@router.post("/generate", response_model=QuizResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/generate", status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit("10/hour")
 def generate_quiz(
+    request: Request,
     body: GenerateQuizRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Full pipeline:
-      1. Fetch upload + verify ownership
-      2. Clean & chunk the extracted text
-      3. Send first chunk to Gemini AI
-      4. Save Quiz + Questions to database
-      5. Return quiz with all questions
+    Enqueue a background quiz-generation job and return immediately.
+    Poll GET /api/quizzes/jobs/{job_id}/status to track progress.
     """
-    # 1. Fetch the upload and verify it belongs to the current user
+    # Validate inputs before queueing so the user gets fast feedback on bad requests.
     upload = (
         db.query(Upload)
         .filter(Upload.id == body.upload_id, Upload.user_id == current_user.id)
@@ -67,155 +69,110 @@ def generate_quiz(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found or does not belong to you.",
         )
-
     if not upload.extracted_text or not upload.extracted_text.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No text could be extracted from this document. Cannot generate a quiz.",
         )
-
-    # Validate difficulty
     if body.difficulty not in ("easy", "medium", "hard"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid difficulty. Must be 'easy', 'medium', or 'hard'.",
         )
 
-    # Clamp num_questions
-    num_questions = max(1, min(body.num_questions, 15))
-
-    # 2. Clean and chunk the extracted text
-    processed = process_text(upload.extracted_text)
-
-    if not processed["chunks"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Document text is too short to generate a quiz.",
-        )
-
-    # Use only the first chunk (largest context window used efficiently)
-    text_chunk = processed["chunks"][0]
-
-    # 3. Call Gemini AI
-    try:
-        ai_questions = generate_questions_from_chunk(
-            text=text_chunk,
-            num_questions=num_questions,
-            difficulty=body.difficulty,
-            question_types=body.question_types,
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"AI returned invalid response: {str(e)}",
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"AI service error: {str(e)}",
-        )
-
-    if not ai_questions:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="AI did not return any valid questions. Please try again.",
-        )
-
-    # 4. Save Quiz to database
-    # Title: "<filename> — <difficulty> quiz"
-    display_name = upload.filename.rsplit(".", 1)[0]  # strip extension
-    quiz_title = f"{display_name} — {body.difficulty.capitalize()} Quiz"
-
-    # Time limit: 1 min per question (60s × num_questions)
-    time_limit = len(ai_questions) * 60
-
-    new_quiz = Quiz(
+    # Create the job row
+    job = GenerationJob(
         user_id=current_user.id,
-        upload_id=upload.id,
-        title=quiz_title,
-        difficulty=body.difficulty,
-        time_limit=time_limit,
-        total_questions=len(ai_questions),
+        job_type="quiz_from_doc",
+        status="pending",
     )
-    db.add(new_quiz)
-    db.flush()  # flush to get new_quiz.id before adding questions
-
-    # Save Questions
-    for index, q in enumerate(ai_questions):
-        question = Question(
-            quiz_id=new_quiz.id,
-            question_text=q["question"],
-            type=q.get("type", "mcq"),
-            payload=q.get("payload", {}),
-            answer_key=q.get("answer_key", {}),
-            points=1,
-            explanation=q.get("explanation", ""),
-            order_index=index,
-        )
-        db.add(question)
-
+    db.add(job)
     db.commit()
-    db.refresh(new_quiz)
+    db.refresh(job)
 
-    return new_quiz
+    # Enqueue background worker
+    background_tasks.add_task(
+        run_quiz_from_doc_job,
+        job_id=job.id,
+        upload_id=body.upload_id,
+        num_questions=max(1, min(body.num_questions, 15)),
+        difficulty=body.difficulty,
+        question_types=body.question_types,
+    )
+
+    return {"job_id": job.id, "status": "pending"}
 
 
 # ─── Generate quiz from topic ─────────────────────────────────────────────────
 
-@router.post("/generate-from-topic", response_model=QuizResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/generate-from-topic", status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit("10/hour")
 def generate_quiz_from_topic(
+    request: Request,
     body: GenerateTopicQuizRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate a quiz from a free-text topic using Gemini's general knowledge."""
+    """Enqueue a topic-based quiz generation job and return immediately."""
     topic = body.topic.strip()
     if not topic:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Topic cannot be empty.")
 
-    try:
-        ai_questions = generate_questions_from_topic(
-            topic=topic,
-            num_questions=body.num_questions,
-            difficulty=body.difficulty,
-            question_types=body.question_types,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"AI service error: {str(e)}")
-
-    if not ai_questions:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="AI did not return any valid questions. Please try again.")
-
-    quiz_title = f"{topic.title()} — {body.difficulty.capitalize()} Quiz"
-    time_limit = len(ai_questions) * 60
-
-    new_quiz = Quiz(
+    job = GenerationJob(
         user_id=current_user.id,
-        upload_id=None,
-        title=quiz_title,
-        difficulty=body.difficulty,
-        time_limit=time_limit,
-        total_questions=len(ai_questions),
+        job_type="quiz_from_topic",
+        status="pending",
     )
-    db.add(new_quiz)
-    db.flush()
-
-    # Save Questions
-    for index, q in enumerate(ai_questions):
-        db.add(Question(
-            quiz_id=new_quiz.id,
-            question_text=q["question"],
-            type=q.get("type", "mcq"),
-            payload=q.get("payload", {}),
-            answer_key=q.get("answer_key", {}),
-            points=1,
-            explanation=q.get("explanation", ""),
-            order_index=index,
-        ))
-
+    db.add(job)
     db.commit()
-    db.refresh(new_quiz)
-    return new_quiz
+    db.refresh(job)
+
+    background_tasks.add_task(
+        run_quiz_from_topic_job,
+        job_id=job.id,
+        topic=topic,
+        num_questions=max(1, min(body.num_questions, 15)),
+        difficulty=body.difficulty,
+        question_types=body.question_types,
+    )
+
+    return {"job_id": job.id, "status": "pending"}
+
+
+# ─── Job status (quiz jobs) ───────────────────────────────────────────────────
+
+@router.get("/jobs/{job_id}/status")
+def get_quiz_job_status(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Poll the status of a quiz generation job.
+    Returns: { job_id, status, result_id, error_message }
+      - status: "pending" | "processing" | "complete" | "failed"
+      - result_id: quiz ID (only when status=="complete")
+      - error_message: set when status=="failed"
+    """
+    job = (
+        db.query(GenerationJob)
+        .filter(
+            GenerationJob.id == job_id,
+            GenerationJob.user_id == current_user.id,
+            GenerationJob.job_type.in_(["quiz_from_doc", "quiz_from_topic"]),
+        )
+        .first()
+    )
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found.")
+
+    return {
+        "job_id":        job.id,
+        "status":        job.status,
+        "result_id":     job.result_id,
+        "error_message": job.error_message,
+    }
 
 
 # ─── List quizzes ─────────────────────────────────────────────────────────────
